@@ -1,0 +1,5 @@
+.streamlit/secrets.toml
+data_raw/
+data/
+__pycache__/
+.pytest_cache/
