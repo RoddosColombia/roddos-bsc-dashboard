@@ -10,8 +10,10 @@ import acceso
 import data_sources as ds
 import respaldo
 import validators as val
+from utils import estilo_roddos
 
 st.set_page_config(page_title="Actualizar datos — RODDOS BSC", layout="wide", page_icon="📤")
+estilo_roddos()
 
 st.title("📤 Actualizar datos")
 st.caption(

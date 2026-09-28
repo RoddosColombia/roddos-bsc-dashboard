@@ -1,26 +1,20 @@
 import datetime
 import streamlit as st
-import pandas as pd
 import plotly.graph_objects as go
 
-from utils import cop
+from utils import cop, estilo_roddos, html, hsafe, kpi, hero
 import acceso
 import data_sources as ds
 
 st.set_page_config(page_title="Tesorería — RODDOS BSC", layout="wide", page_icon="💰")
+estilo_roddos()
 acceso.exigir_director()
 
-
-def mdsafe(s):
-    return str(s).replace("$", "\\$")
-
-
-COLOR_OK = "#1F6F5C"
-COLOR_ALERTA = "#B7791F"
-COLOR_CRIT = "#9C2B0F"
+COLOR_OK = "#00C853"
+COLOR_ALERTA = "#FFB300"
+COLOR_CRIT = "#FF5252"
 
 st.title("💰 Tesorería y flujo de caja")
-st.caption("Ayer · esta semana · este mes — calculado desde la última carga de Flujo_Pagos_Deudas.xlsx (hoja Tablero mes + Base real egresos/ingresos). Sube una versión nueva en 📤 Actualizar datos.")
 
 tes = ds.leer_tesoreria()
 dash = tes["dashboard"]
@@ -30,17 +24,20 @@ ingresos = tes["ingresos"]
 hoy = dash["corte_fecha"] or egresos["Fecha"].max().date()
 ayer = hoy - datetime.timedelta(days=1)
 semana_ini = hoy - datetime.timedelta(days=hoy.weekday())
-mes_ini = hoy.replace(day=1)
 
 al_dia = "AL DÍA" in (dash["corte_txt"] or "").upper()
 c1, c2 = st.columns(2)
-c1.info(f"📅 Corte: **{hoy}** ({'al día' if al_dia else 'ver detalle'}) · Mes de control: **{dash['mes_control'].strftime('%B %Y').capitalize() if dash['mes_control'] else '—'}**")
-c2.info(f"🏦 Caja disponible total (todas las cuentas): **{cop(dash['caja_disponible_total'])}**")
+c1.caption(f"📅 Corte {hoy} ({'al día' if al_dia else 'ver detalle'})")
+c2.caption(f"🗓️ Mes de control: {dash['mes_control'].strftime('%B %Y').capitalize() if dash['mes_control'] else '—'}")
 
+res_mes = dash["resultado_mes"]
+hero("Caja disponible total · todas las cuentas", cop(dash["caja_disponible_total"]),
+     chip_txt=f"resultado del mes {cop(res_mes)}",
+     chip_color=COLOR_OK if res_mes >= 0 else COLOR_CRIT)
 if dash["egresos_por_clasificar"]:
     st.caption(f"⚠️ {cop(dash['egresos_por_clasificar'])} en movimientos aún por clasificar — no cambia la caja, pero puede reasignar categorías al depurarse.")
 
-st.divider()
+st.write("")
 
 
 def egresos_en(desde, hasta):
@@ -53,75 +50,57 @@ def ingresos_en(desde, hasta):
     return float(m["Valor"].fillna(0).sum())
 
 
-def tile_flujo(col, label, valor, negativo_es_malo=True):
-    with col:
-        with st.container(border=True):
-            st.caption(label)
-            color = None
-            if negativo_es_malo:
-                color = COLOR_OK if valor >= 0 else COLOR_CRIT
-            st.markdown(f"<span style='font-size:26px; font-weight:700; color:{color or 'inherit'}'>{mdsafe(cop(valor))}</span>", unsafe_allow_html=True)
+def flujo(cols, ing, egr, etiqueta_extra=""):
+    neto = ing - egr
+    with cols[0]:
+        kpi(f"Ingresos {etiqueta_extra}".strip(), cop(ing))
+    with cols[1]:
+        kpi(f"Egresos {etiqueta_extra}".strip(), cop(egr))
+    with cols[2]:
+        kpi("Resultado neto", cop(neto), valor_color=COLOR_OK if neto >= 0 else COLOR_CRIT)
 
 
-st.header("1 · ¿Cómo nos fue ayer?")
-cols = st.columns(3)
-ing_ayer, egr_ayer = ingresos_en(ayer, ayer), egresos_en(ayer, ayer)
-tile_flujo(cols[0], "Ingresos", ing_ayer, negativo_es_malo=False)
-tile_flujo(cols[1], "Egresos", egr_ayer, negativo_es_malo=False)
-tile_flujo(cols[2], "Resultado neto", ing_ayer - egr_ayer)
+st.subheader("1 · ¿Cómo nos fue ayer?")
+flujo(st.columns(3), ingresos_en(ayer, ayer), egresos_en(ayer, ayer))
 
-st.divider()
-
-st.header("2 · ¿Cómo vamos esta semana?")
-cols = st.columns(3)
-ing_sem, egr_sem = ingresos_en(semana_ini, hoy), egresos_en(semana_ini, hoy)
-tile_flujo(cols[0], "Ingresos (lun-hoy)", ing_sem, negativo_es_malo=False)
-tile_flujo(cols[1], "Egresos (lun-hoy)", egr_sem, negativo_es_malo=False)
-tile_flujo(cols[2], "Resultado neto", ing_sem - egr_sem)
+st.subheader("2 · ¿Cómo vamos esta semana?")
+flujo(st.columns(3), ingresos_en(semana_ini, hoy), egresos_en(semana_ini, hoy), "(lun-hoy)")
 
 egr_sem_cat = egresos[(egresos["Fecha"].dt.date >= semana_ini) & (egresos["Fecha"].dt.date <= hoy)]
 if not egr_sem_cat.empty:
-    top_cat = egr_sem_cat.groupby("Categoría normalizada")["Valor"].sum().sort_values(ascending=False).head(6)
-    fig = go.Figure(go.Bar(x=top_cat.values, y=top_cat.index, orientation="h", marker_color=COLOR_ALERTA))
-    fig.update_layout(height=280, margin=dict(l=10, r=10, t=30, b=10), title="Egresos de la semana por categoría (top 6)")
-    st.plotly_chart(fig, use_container_width=True)
+    with st.expander("Egresos de la semana por categoría"):
+        top_cat = egr_sem_cat.groupby("Categoría normalizada")["Valor"].sum().sort_values(ascending=False).head(6)
+        fig = go.Figure(go.Bar(x=top_cat.values, y=top_cat.index, orientation="h", marker_color=COLOR_ALERTA))
+        fig.update_layout(height=280, margin=dict(l=10, r=10, t=10, b=10),
+                          paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#F2F2F2")
+        st.plotly_chart(fig, use_container_width=True)
 
-st.divider()
-
-st.header("3 · ¿Cómo vamos este mes?")
-cols = st.columns(4)
-with cols[0]:
-    with st.container(border=True):
-        st.caption("Presupuesto del mes")
-        st.markdown(f"### {mdsafe(cop(dash['presupuesto_mes']))}")
-        st.progress(min(1.0, dash["ejecutado_mes"] / dash["presupuesto_mes"]) if dash["presupuesto_mes"] else 0,
-                    text=f"Ejecutado: {cop(dash['ejecutado_mes'])} ({dash['ejecutado_mes']/dash['presupuesto_mes']*100:.0f}%)" if dash["presupuesto_mes"] else "Ejecutado: —")
-with cols[1]:
-    with st.container(border=True):
-        st.caption("Ingreso real del mes")
-        st.markdown(f"### {mdsafe(cop(dash['ingreso_real_mes']))}")
-        color = COLOR_OK if dash["pct_cumplimiento_meta"] >= 0.95 else (COLOR_ALERTA if dash["pct_cumplimiento_meta"] >= 0.75 else COLOR_CRIT)
-        st.markdown(f"<span style='color:{color}; font-weight:700'>{dash['pct_cumplimiento_meta']*100:.0f}% de la meta del mes</span>", unsafe_allow_html=True)
-with cols[2]:
-    with st.container(border=True):
-        st.caption("Resultado del mes (ingreso − egreso)")
-        color = COLOR_OK if dash["resultado_mes"] >= 0 else COLOR_CRIT
-        st.markdown(f"<span style='font-size:22px; font-weight:700; color:{color}'>{mdsafe(cop(dash['resultado_mes']))}</span>", unsafe_allow_html=True)
-with cols[3]:
-    with st.container(border=True):
-        st.caption("Mayor egreso en un día (mes)")
-        st.markdown(f"### {mdsafe(cop(dash['mayor_egreso_dia']))}")
+st.subheader("3 · ¿Cómo vamos este mes?")
+mcols = st.columns(4)
+with mcols[0]:
+    pct_pres = dash["ejecutado_mes"] / dash["presupuesto_mes"] if dash["presupuesto_mes"] else 0
+    kpi("Presupuesto del mes", cop(dash["presupuesto_mes"]),
+        sub=f"Ejecutado {cop(dash['ejecutado_mes'])} ({pct_pres*100:.0f}%)" if dash["presupuesto_mes"] else "Ejecutado —")
+with mcols[1]:
+    pctm = dash["pct_cumplimiento_meta"]
+    cmeta = COLOR_OK if pctm >= 0.95 else (COLOR_ALERTA if pctm >= 0.75 else COLOR_CRIT)
+    kpi("Ingreso real del mes", cop(dash["ingreso_real_mes"]),
+        chip_txt=f"{pctm*100:.0f}% de la meta", chip_color=cmeta)
+with mcols[2]:
+    kpi("Resultado del mes", cop(dash["resultado_mes"]),
+        valor_color=COLOR_OK if dash["resultado_mes"] >= 0 else COLOR_CRIT)
+with mcols[3]:
+    kpi("Mayor egreso en un día", cop(dash["mayor_egreso_dia"]))
 
 st.caption(f"Fuente: Flujo_Pagos_Deudas.xlsx · Tablero mes — corte {dash['corte_txt'].strip()}")
 
 st.divider()
 
-# ============ RESULTADO OBJETIVO DEL MES (Fase 1, decisión #4 — 2026-09-23) ============
-st.header("Resultado objetivo del mes")
+# ============ RESULTADO OBJETIVO DEL MES ============
+st.subheader("🎯 Resultado objetivo del mes")
 st.caption(
-    "Reemplaza los dos modelos de proyección que competían aquí (Proyección 18M del archivo real "
-    "y el modelo del informe financiero). Fórmula definida por la dirección: cuánto debería quedar "
-    "en caja este mes si se cumplen las metas de recaudo y ventas, después de los gastos fijos y Auteco."
+    "Cuánto debería quedar en caja este mes si se cumplen las metas de recaudo y ventas, "
+    "después de los gastos fijos y el pago a Auteco. Fórmula definida por la dirección."
 )
 
 metas = ds.leer_metas()
@@ -136,23 +115,24 @@ else:
     gasto_fijo = metas["gasto_fijo"]
     resultado_objetivo = meta_pactada_recaudo + meta_ci - gasto_fijo - pago_auteco_mes
 
-    st.markdown("**Ingreso objetivo por recaudo de cuotas semanales** (meta pactada, `Proyeccion_Recaudo.xlsx` · Resumen Semanal)")
-    st.markdown(f"### {mdsafe(cop(meta_pactada_recaudo))}")
-    st.markdown("**+ Ingreso objetivo por cuotas iniciales** (`Metas_RODDOS.xlsx`)")
-    st.markdown(f"### {mdsafe(cop(meta_ci))}")
-    st.markdown("**− Gasto fijo mensual** (`Metas_RODDOS.xlsx`)")
-    st.markdown(f"### {mdsafe(cop(gasto_fijo))}")
-    st.markdown("**− Pago a Auteco del mes** (calculado en vivo: saldo pendiente de facturas con vencimiento este mes, `Flujo_Pagos_Deudas.xlsx` · Facturas Auteco)")
-    st.markdown(f"### {mdsafe(cop(pago_auteco_mes))}")
+    def linea(signo, etiqueta, valor):
+        return (f"<div style='display:flex;justify-content:space-between;align-items:center;padding:10px 4px;border-top:1px solid #262626'>"
+                f"<span style='font-size:14px;color:#B8BCC0'>{signo} {etiqueta}</span>"
+                f"<span style='font-size:16px;font-weight:700;color:#F2F2F2;font-family:Montserrat,sans-serif'>{hsafe(cop(valor))}</span></div>")
 
-    st.divider()
-    color_res = COLOR_OK if resultado_objetivo >= 0 else COLOR_CRIT
-    st.markdown("**= Resultado objetivo del mes**")
-    st.markdown(f"<span style='font-size:32px; font-weight:700; color:{color_res}'>{mdsafe(cop(resultado_objetivo))}</span>", unsafe_allow_html=True)
+    filas = (linea("+", "Recaudo objetivo de cuotas semanales (meta pactada)", meta_pactada_recaudo)
+             + linea("+", "Ingreso objetivo por cuotas iniciales (Metas)", meta_ci)
+             + linea("−", "Gasto fijo mensual (Metas)", -gasto_fijo)
+             + linea("−", "Pago a Auteco del mes (facturas que vencen este mes)", -pago_auteco_mes))
+    html(f"<div style='background:#1A1A1A;border:1px solid #2C2C2C;border-radius:14px;padding:8px 16px'>{filas}</div>")
+
+    st.write("")
+    hero("= Resultado objetivo del mes", cop(resultado_objetivo),
+         chip_txt="en verde" if resultado_objetivo >= 0 else "en rojo",
+         chip_color=COLOR_OK if resultado_objetivo >= 0 else COLOR_CRIT)
 
     st.caption(
-        f"Este resultado asume que se cumple la meta de ventas del mes ({metas['ventas']:.0f} unidades) — "
-        "es de ahí que sale el ingreso objetivo de cuotas iniciales. Si el inventario disponible no alcanza "
-        "para sostener esas ventas, este resultado no se va a cumplir aunque la cartera pague al día. "
-        "Ver 'Motos disponibles' y 'Días de inventario' en la página principal."
+        f"Asume que se cumple la meta de ventas ({metas['ventas']:.0f} unidades) — de ahí sale el ingreso "
+        "de cuotas iniciales. Si el inventario disponible no alcanza para esas ventas, este resultado no se "
+        "cumple aunque la cartera pague al día. Ver 'Días de inventario' en la página principal."
     )

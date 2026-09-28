@@ -1,0 +1,10 @@
+# Identidad visual RODDOS — Financing Motion (dark mode).
+# Colores de marca: negro #121212, Cyber Cyan #00E5FF, Growth Green #00C853.
+
+[theme]
+base = "dark"
+primaryColor = "#00E5FF"
+backgroundColor = "#121212"
+secondaryBackgroundColor = "#1B1B1B"
+textColor = "#F2F2F2"
+font = "sans serif"
