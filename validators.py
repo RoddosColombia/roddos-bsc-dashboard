@@ -179,6 +179,23 @@ def validar_metas(wb):
     return errores
 
 
+def validar_cobranza_semanal(wb):
+    hojas = ["Dashboard", "Cuotas de la semana", "Cuotas vencidas"]
+    faltan = _hojas_faltantes(wb, hojas)
+    if faltan:
+        return [f"A este archivo le faltan la(s) hoja(s) {faltan}. Usa la plantilla de cobranza semanal "
+                "(hojas: Dashboard, Cuotas de la semana, Cuotas vencidas)."]
+    faltan_sem = _columnas_faltantes(wb["Cuotas de la semana"],
+                                     ["Valor cuota a pagar esta semana", "Fecha de pago", "Pagada"], fila_header=1)
+    if faltan_sem:
+        return _error_estructura("archivo de Cobranza semanal", hoja="Cuotas de la semana", faltan_cols=faltan_sem)
+    faltan_ven = _columnas_faltantes(wb["Cuotas vencidas"],
+                                     ["Valor cuota vencida", "Pagada"], fila_header=1)
+    if faltan_ven:
+        return _error_estructura("archivo de Cobranza semanal", hoja="Cuotas vencidas", faltan_cols=faltan_ven)
+    return []
+
+
 VALIDADORES = {
     "recaudo": validar_recaudo,
     "inventario": validar_inventario,
@@ -187,4 +204,5 @@ VALIDADORES = {
     "rrhh": validar_rrhh,
     "embudo": validar_embudo,
     "metas": validar_metas,
+    "cobranza": validar_cobranza_semanal,
 }

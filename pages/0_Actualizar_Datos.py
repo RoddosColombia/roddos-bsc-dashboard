@@ -51,6 +51,10 @@ FUENTES = [
          cache=ds.leer_metas, solo_directores=True, descripcion="Metas_RODDOS.xlsx — objetivos que fija la dirección cada mes "
                                            "(ventas, % aprobación, % agendas, tope de mora, gasto fijo). "
                                            "Agrega una fila nueva cada mes, no borres las anteriores."),
+    dict(nombre="Cobranza semanal", archivo=ds.F_COBRANZA, validador=val.validar_cobranza_semanal,
+         cache=ds.leer_cobranza_semanal, descripcion="Cobranza_Semanal.xlsx — seguimiento de las cuotas a cobrar de la semana "
+                                           "(hojas: Dashboard, Cuotas de la semana, Cuotas vencidas). Marca 'Pagada' a medida "
+                                           "que cobras; alimenta la sección Cobranza de la semana en la página principal."),
 ]
 
 

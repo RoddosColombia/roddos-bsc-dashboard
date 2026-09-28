@@ -30,7 +30,8 @@ F_TESORERIA = os.path.join(RAW_DIR, "Flujo_Pagos_Deudas.xlsx")
 F_RRHH = os.path.join(RAW_DIR, "Control_RRHH_Nomina_RODDOS_2026.xlsx")
 F_EMBUDO = os.path.join(RAW_DIR, "Embudo_Comercial_RODDOS.xlsx")
 F_METAS = os.path.join(RAW_DIR, "Metas_RODDOS.xlsx")
-ARCHIVOS = [F_INVENTARIO, F_RECAUDO, F_CONCILIACION, F_TESORERIA, F_RRHH, F_EMBUDO, F_METAS]
+F_COBRANZA = os.path.join(RAW_DIR, "Cobranza_Semanal.xlsx")
+ARCHIVOS = [F_INVENTARIO, F_RECAUDO, F_CONCILIACION, F_TESORERIA, F_RRHH, F_EMBUDO, F_METAS, F_COBRANZA]
 
 
 @st.cache_resource
@@ -370,6 +371,113 @@ def leer_metas(referencia=None):
         pct_mora_tope=fila["Meta % mora tope"],
         ci_dinero=fila["Meta ingreso cuotas iniciales ($)"],
         gasto_fijo=fila["Gasto fijo mensual ($)"],
+    )
+
+
+@st.cache_data(ttl=600)
+def leer_cobranza_semanal():
+    """Lee Cobranza_Semanal.xlsx (seguimiento semanal de cobranza).
+    Toma los totales de la hoja 'Dashboard'; si una celda no está recalculada
+    (None), la calcula desde las hojas de detalle para no quedar en blanco."""
+    if not os.path.exists(F_COBRANZA):
+        return None
+    wb = openpyxl.load_workbook(F_COBRANZA, data_only=True)
+    if "Dashboard" not in wb.sheetnames:
+        return None
+    d = wb["Dashboard"]
+
+    def num(coord):
+        v = d[coord].value
+        return v if isinstance(v, (int, float)) else None
+
+    hoja_sem = "Cuotas de la semana" if "Cuotas de la semana" in wb.sheetnames else None
+    hoja_ven = "Cuotas vencidas" if "Cuotas vencidas" in wb.sheetnames else None
+
+    def _valores(hoja, col_valor="Valor cuota a pagar esta semana"):
+        if hoja is None:
+            return []
+        ws = wb[hoja]
+        headers = [c.value for c in ws[1]]
+        idx = {h: i for i, h in enumerate(headers)}
+        cv = idx.get("Valor cuota a pagar esta semana", idx.get("Valor cuota vencida"))
+        cp = idx.get("Pagada")
+        filas = []
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if cv is None or row[cv] is None:
+                continue
+            filas.append((row[cv], row[cp] if cp is not None else None))
+        return filas
+
+    sem = _valores(hoja_sem)
+    ven = _valores(hoja_ven)
+
+    def _sum(filas):
+        return float(sum(v for v, _ in filas))
+
+    def _sum_pag(filas):
+        return float(sum(v for v, p in filas if p is True))
+
+    potencial_semana = num("B4")
+    potencial_vencidas = num("C4")
+    if potencial_semana is None:
+        potencial_semana = _sum(sem)
+    if potencial_vencidas is None:
+        potencial_vencidas = _sum(ven)
+    potencial_total = num("D4")
+    if potencial_total is None:
+        potencial_total = potencial_semana + potencial_vencidas
+
+    n_cuotas_semana = num("E4") if num("E4") is not None else len(sem)
+    n_vencidas = num("F4") if num("F4") is not None else len(ven)
+    total_cuotas = num("G4") if num("G4") is not None else (n_cuotas_semana + n_vencidas)
+    cuotas_cobradas = num("H4")
+    if cuotas_cobradas is None:
+        cuotas_cobradas = sum(1 for _, p in (sem + ven) if p is True)
+    cobrado_dinero = num("J4")
+    if cobrado_dinero is None:
+        cobrado_dinero = _sum_pag(sem) + _sum_pag(ven)
+    pct_avance = num("K4")
+    if pct_avance is None:
+        pct_avance = (cobrado_dinero / potencial_total) if potencial_total else 0.0
+
+    # objetivo por día: se calcula desde la hoja de detalle (agrupando por fecha
+    # de pago), no desde el Dashboard, para no depender de que Excel recalcule.
+    DIAS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+    agg = {}
+    if hoja_sem is not None:
+        ws = wb[hoja_sem]
+        headers = [c.value for c in ws[1]]
+        idx = {h: i for i, h in enumerate(headers)}
+        cf = idx.get("Fecha de pago")
+        cv = idx.get("Valor cuota a pagar esta semana")
+        if cf is not None and cv is not None:
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                f = row[cf]
+                if not isinstance(f, datetime.datetime):
+                    continue
+                fd = f.date()
+                a = agg.setdefault(fd, {"n": 0, "obj": 0.0})
+                a["n"] += 1
+                a["obj"] += (row[cv] or 0) if isinstance(row[cv], (int, float)) else 0
+    por_dia = [dict(dia=DIAS_ES[f.weekday()], fecha=f, n=v["n"], objetivo=v["obj"])
+               for f, v in sorted(agg.items())]
+    fechas = [x["fecha"] for x in por_dia]
+    titulo = d["B1"].value or "Cobranza de la semana"
+
+    return dict(
+        titulo=titulo,
+        semana_ini=min(fechas) if fechas else None,
+        semana_fin=max(fechas) if fechas else None,
+        potencial_semana=potencial_semana,
+        potencial_vencidas=potencial_vencidas,
+        potencial_total=potencial_total,
+        n_cuotas_semana=int(n_cuotas_semana),
+        n_vencidas=int(n_vencidas),
+        total_cuotas=int(total_cuotas),
+        cuotas_cobradas=int(cuotas_cobradas),
+        cobrado_dinero=cobrado_dinero,
+        pct_avance=pct_avance,
+        por_dia=por_dia,
     )
 
 

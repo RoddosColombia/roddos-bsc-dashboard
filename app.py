@@ -242,6 +242,45 @@ kpi_card(k2, "Cartera vencida · riesgo", fmt_val("vencidas_dinero", cv),
 
 st.write("")
 
+# ---- Cobranza de la semana ----
+cob = ds.leer_cobranza_semanal()
+if cob:
+    pct = max(0.0, min(1.0, cob["pct_avance"] or 0))
+    rango = ""
+    if cob["semana_ini"] and cob["semana_fin"]:
+        rango = f"{cob['semana_ini'].strftime('%d/%m')} – {cob['semana_fin'].strftime('%d/%m')}"
+
+    def _mini(lbl, val, color="#FFFFFF"):
+        return (f"<div style='flex:1;min-width:150px;text-align:center;padding:6px'>"
+                f"<div style='color:#9AA0A6;font-size:11px;text-transform:uppercase;letter-spacing:0.04em'>{lbl}</div>"
+                f"<div style='font-family:Montserrat,sans-serif;font-weight:800;font-size:22px;color:{color}'>{val}</div></div>")
+
+    barra_col = COLOR_OK if pct >= 0.95 else (COLOR_ALERTA if pct >= 0.6 else COLOR_CRIT)
+    minis = (_mini("Potencial total", hsafe(cop(cob["potencial_total"])))
+             + _mini("Cobrado", hsafe(cop(cob["cobrado_dinero"])), COLOR_OK)
+             + _mini("% avance", f"{pct*100:.0f}%", barra_col)
+             + _mini("Cuotas cobradas", f"{cob['cuotas_cobradas']} / {cob['total_cuotas']}")
+             + _mini("Vencidas por cobrar", f"{cob['n_vencidas']}", COLOR_ALERTA))
+    html(f"<div style='{CARD}'>"
+         f"<div style='display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px'>"
+         f"<span style='font-family:Montserrat,sans-serif;font-weight:700;font-size:16px'>Cobranza de la semana</span>"
+         f"<span style='color:#8A8F94;font-size:12px'>{rango}</span></div>"
+         f"<div style='display:flex;flex-wrap:wrap'>{minis}</div>"
+         f"<div style='height:9px;background:#0E0E0E;border-radius:20px;margin-top:12px'>"
+         f"<div style='width:{pct*100:.0f}%;height:100%;background:{barra_col};border-radius:20px'></div></div></div>")
+
+    if cob["por_dia"]:
+        with st.expander("📅 Objetivo de cobro por día"):
+            for x in cob["por_dia"]:
+                cda, cdb, cdc = st.columns([2, 1, 3])
+                cda.markdown(f"**{x['dia']}** {x['fecha'].strftime('%d/%m')}")
+                cdb.markdown(f"{x['n']} cuotas")
+                cdc.markdown(mdsafe(cop(x["objetivo"])))
+else:
+    st.caption("💵 Cobranza de la semana: sin datos todavía — sube Cobranza_Semanal.xlsx en 📤 Actualizar datos.")
+
+st.write("")
+
 # ---- El embudo: dónde está la fuga ----
 REP = {"1 · Demanda": "leads", "2 · Crédito": "pct_aprobacion", "3 · Agenda": "agendas_totales",
        "4 · Venta": "ventas", "5 · Facturación y entrega": "facturacion",
