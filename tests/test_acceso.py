@@ -39,7 +39,7 @@ def test_clave_correcta():
 
 @pytest.mark.parametrize("pagina, marca", [
     ("1_Tesoreria.py", "Tesorería y flujo de caja"),
-    ("2_RRHH.py", "RRHH — Nómina y equipo"),
+    ("2_RRHH.py", "RRHH · Nómina y equipo"),
 ])
 def test_pagina_restringida_sin_clave_no_muestra_nada(pagina, marca):
     at = _pagina(pagina)
@@ -50,7 +50,7 @@ def test_pagina_restringida_sin_clave_no_muestra_nada(pagina, marca):
 
 @pytest.mark.parametrize("pagina, marca", [
     ("1_Tesoreria.py", "Tesorería y flujo de caja"),
-    ("2_RRHH.py", "RRHH — Nómina y equipo"),
+    ("2_RRHH.py", "RRHH · Nómina y equipo"),
 ])
 def test_pagina_restringida_clave_equivocada(pagina, marca):
     at = _pagina(pagina)
@@ -62,7 +62,7 @@ def test_pagina_restringida_clave_equivocada(pagina, marca):
 
 @pytest.mark.parametrize("pagina, marca", [
     ("1_Tesoreria.py", "Tesorería y flujo de caja"),
-    ("2_RRHH.py", "RRHH — Nómina y equipo"),
+    ("2_RRHH.py", "RRHH · Nómina y equipo"),
 ])
 def test_pagina_restringida_clave_correcta(pagina, marca):
     at = _pagina(pagina)

@@ -2,9 +2,9 @@
 # Colores de marca: negro #121212, Cyber Cyan #00E5FF, Growth Green #00C853.
 
 [theme]
-base = "dark"
-primaryColor = "#00E5FF"
-backgroundColor = "#121212"
-secondaryBackgroundColor = "#1B1B1B"
-textColor = "#F2F2F2"
+base = "light"
+primaryColor = "#00B8D4"
+backgroundColor = "#F6F7F9"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#1A1D23"
 font = "sans serif"

@@ -4,7 +4,7 @@ import os
 import streamlit as st
 import plotly.graph_objects as go
 
-from utils import cop, estilo_roddos
+from utils import cop, estilo_roddos, encabezado
 import metricas as mx
 import objetivos as obj
 import data_sources as ds
@@ -27,14 +27,14 @@ def html(s):
     st.markdown(s, unsafe_allow_html=True)
 
 
-COLOR_OK = "#00C853"
-COLOR_ALERTA = "#FFB300"
-COLOR_CRIT = "#FF5252"
-COLOR_NEUTRO = "#9AA0A6"
+COLOR_OK = "#00A344"
+COLOR_ALERTA = "#E08600"
+COLOR_CRIT = "#E5484D"
+COLOR_NEUTRO = "#5B616E"
 
-CARD = "background:#1A1A1A;border:1px solid #2C2C2C;border-radius:14px;padding:16px 18px;"
+CARD = "background:#FFFFFF;border:1px solid #E6E8EC;border-radius:16px;padding:16px 18px;"
 
-st.title("🏍️ RODDOS — Operación diaria")
+encabezado("Operación diaria · ayer, esta semana y este mes")
 
 data = mx.construir_metricas()
 M = data["metricas"]
@@ -188,7 +188,7 @@ else:
 html(f"<div style='{CARD}display:flex;gap:12px;align-items:center;border-left:4px solid {vcolor};margin-bottom:14px'>"
      f"<span style='font-size:22px'>{icono}</span>"
      f"<div><div style='font-family:Montserrat,sans-serif;font-weight:700;font-size:17px'>{titulo}</div>"
-     f"<div style='color:#9AA0A6;font-size:13px;margin-top:2px'>{hsafe(sub)}</div></div></div>")
+     f"<div style='color:#5B616E;font-size:13px;margin-top:2px'>{hsafe(sub)}</div></div></div>")
 
 # ---- Recaudo (número héroe) ----
 etiqueta_hero = {"ayer": "Recaudo de ayer", "semana": "Recaudo de la semana", "mes": "Recaudo del mes"}[periodo]
@@ -198,17 +198,17 @@ if periodo == "mes" and meta_pactada_recaudo and recaudo_val is not None:
     hero_pct = min(100, recaudo_val / meta_pactada_recaudo * 100)
     pace_pct = min(100, dia_por_rubro.get("pagos_dinero", dias_mes) / dias_mes * 100)
     delta = recaudo_val - (meta_rec_p or 0)
-    barra = (f"<div style='height:9px;background:#0E0E0E;border-radius:20px;margin:14px 0 8px;position:relative'>"
+    barra = (f"<div style='height:9px;background:#EAECEF;border-radius:20px;margin:14px 0 8px;position:relative'>"
              f"<div style='width:{hero_pct:.0f}%;height:100%;background:{hcolor};border-radius:20px'></div>"
-             f"<div style='position:absolute;top:-3px;left:{pace_pct:.0f}%;width:2px;height:15px;background:#CFCFCF'></div></div>"
-             f"<div style='font-size:13px;color:#9AA0A6'>Esperado a hoy: <b style='color:#F2F2F2'>{fmt_val('pagos_dinero', meta_rec_p)}</b> · "
+             f"<div style='position:absolute;top:-3px;left:{pace_pct:.0f}%;width:2px;height:15px;background:#8A909C'></div></div>"
+             f"<div style='font-size:13px;color:#5B616E'>Esperado a hoy: <b style='color:#1A1D23'>{fmt_val('pagos_dinero', meta_rec_p)}</b> · "
              f"<span style='color:{hcolor};font-weight:700'>{fmt_val('pagos_dinero', delta)} vs ritmo</span></div>")
 meta_txt = f"de {fmt_val('pagos_dinero', meta_pactada_recaudo)} meta" if (periodo == "mes" and meta_pactada_recaudo) else etiqueta_hero.lower()
 html(f"<div style='{CARD}'>"
      f"<div style='display:flex;justify-content:space-between;align-items:flex-start'>"
-     f"<div><div style='color:#9AA0A6;font-size:13px'>{etiqueta_hero} · cobranza</div>"
-     f"<div style='margin-top:4px'><span style='font-family:Montserrat,sans-serif;font-weight:800;font-size:38px;color:#fff'>{hsafe(fmt_val('pagos_dinero', recaudo_val))}</span> "
-     f"<span style='color:#8A8F94;font-size:15px'>{hsafe(meta_txt)}</span></div></div>"
+     f"<div><div style='color:#5B616E;font-size:13px'>{etiqueta_hero} · cobranza</div>"
+     f"<div style='margin-top:4px'><span style='font-family:Montserrat,sans-serif;font-weight:800;font-size:38px;color:#1A1D23'>{hsafe(fmt_val('pagos_dinero', recaudo_val))}</span> "
+     f"<span style='color:#8A909C;font-size:15px'>{hsafe(meta_txt)}</span></div></div>"
      f"<span style='background:{hcolor}22;color:{hcolor};font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px;white-space:nowrap'>{htxt}</span>"
      f"</div>{barra}</div>")
 
@@ -218,10 +218,10 @@ st.write("")
 def kpi_card(col, etiqueta, valor, chip_txt, chip_color, sub=""):
     with col:
         html(f"<div style='{CARD}'>"
-             f"<div style='color:#9AA0A6;font-size:13px'>{etiqueta}</div>"
-             f"<div style='font-family:Montserrat,sans-serif;font-weight:800;font-size:26px;color:#fff;margin:4px 0'>{hsafe(valor)}</div>"
+             f"<div style='color:#5B616E;font-size:13px'>{etiqueta}</div>"
+             f"<div style='font-family:Montserrat,sans-serif;font-weight:800;font-size:26px;color:#1A1D23;margin:4px 0'>{hsafe(valor)}</div>"
              f"<span style='color:{chip_color};font-size:12px;font-weight:700'>● {chip_txt}</span>"
-             + (f"<div style='color:#8A8F94;font-size:12px;margin-top:3px'>{hsafe(sub)}</div>" if sub else "")
+             + (f"<div style='color:#8A909C;font-size:12px;margin-top:3px'>{hsafe(sub)}</div>" if sub else "")
              + "</div>")
 
 
@@ -250,9 +250,9 @@ if cob:
     if cob["semana_ini"] and cob["semana_fin"]:
         rango = f"{cob['semana_ini'].strftime('%d/%m')} – {cob['semana_fin'].strftime('%d/%m')}"
 
-    def _mini(lbl, val, color="#FFFFFF"):
+    def _mini(lbl, val, color="#1A1D23"):
         return (f"<div style='flex:1;min-width:150px;text-align:center;padding:6px'>"
-                f"<div style='color:#9AA0A6;font-size:11px;text-transform:uppercase;letter-spacing:0.04em'>{lbl}</div>"
+                f"<div style='color:#5B616E;font-size:11px;text-transform:uppercase;letter-spacing:0.04em'>{lbl}</div>"
                 f"<div style='font-family:Montserrat,sans-serif;font-weight:800;font-size:22px;color:{color}'>{val}</div></div>")
 
     barra_col = COLOR_OK if pct >= 0.95 else (COLOR_ALERTA if pct >= 0.6 else COLOR_CRIT)
@@ -264,9 +264,9 @@ if cob:
     html(f"<div style='{CARD}'>"
          f"<div style='display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px'>"
          f"<span style='font-family:Montserrat,sans-serif;font-weight:700;font-size:16px'>Cobranza de la semana</span>"
-         f"<span style='color:#8A8F94;font-size:12px'>{rango}</span></div>"
+         f"<span style='color:#8A909C;font-size:12px'>{rango}</span></div>"
          f"<div style='display:flex;flex-wrap:wrap'>{minis}</div>"
-         f"<div style='height:9px;background:#0E0E0E;border-radius:20px;margin-top:12px'>"
+         f"<div style='height:9px;background:#EAECEF;border-radius:20px;margin-top:12px'>"
          f"<div style='width:{pct*100:.0f}%;height:100%;background:{barra_col};border-radius:20px'></div></div></div>")
 
     if cob["por_dia"]:
@@ -285,7 +285,7 @@ st.write("")
 REP = {"1 · Demanda": "leads", "2 · Crédito": "pct_aprobacion", "3 · Agenda": "agendas_totales",
        "4 · Venta": "ventas", "5 · Facturación y entrega": "facturacion",
        "6 · Cartera y mora": "vencidas_dinero", "7 · Inventario": "dias_inventario"}
-filas = (f"<div style='font-size:12px;color:#8A8F94;text-transform:uppercase;letter-spacing:0.05em;padding:2px 4px 10px'>"
+filas = (f"<div style='font-size:12px;color:#8A909C;text-transform:uppercase;letter-spacing:0.05em;padding:2px 4px 10px'>"
          f"El embudo {periodo_txt} · dónde está la fuga</div>")
 for nombre_etapa, claves in mx.ETAPAS:
     rep = REP.get(nombre_etapa, claves[-1])
@@ -296,10 +296,10 @@ for nombre_etapa, claves in mx.ETAPAS:
     else:
         dotc = COLOR_NEUTRO
     valtxt = fmt_val(rep, v) if v is not None else "sin dato"
-    filas += (f"<div style='display:flex;justify-content:space-between;align-items:center;padding:11px 4px;border-top:1px solid #262626'>"
+    filas += (f"<div style='display:flex;justify-content:space-between;align-items:center;padding:11px 4px;border-top:1px solid #EEF0F3'>"
               f"<span style='font-size:14px'>{nombre_etapa}</span>"
               f"<span style='display:flex;align-items:center;gap:10px'>"
-              f"<span style='font-size:14px;font-weight:700;color:#F2F2F2'>{hsafe(valtxt)}</span>"
+              f"<span style='font-size:14px;font-weight:700;color:#1A1D23'>{hsafe(valtxt)}</span>"
               f"<span style='width:9px;height:9px;border-radius:50%;background:{dotc}'></span></span></div>")
 html(f"<div style='{CARD}'>{filas}</div>")
 
@@ -313,21 +313,21 @@ if ag_tot is not None:
     conv_p = comp / vin if vin else None
     conv_txt = f"{conv_p*100:.0f}%" if conv_p is not None else "—"
 
-    def mini(lbl, val, color="#FFFFFF"):
+    def mini(lbl, val, color="#1A1D23"):
         return (f"<div style='flex:1;text-align:center;padding:6px'>"
-                f"<div style='color:#9AA0A6;font-size:11px;text-transform:uppercase;letter-spacing:0.04em'>{lbl}</div>"
+                f"<div style='color:#5B616E;font-size:11px;text-transform:uppercase;letter-spacing:0.04em'>{lbl}</div>"
                 f"<div style='font-family:Montserrat,sans-serif;font-weight:800;font-size:22px;color:{color}'>{val}</div></div>")
 
     fila_ag = (mini("Agendadas", ag_tot)
-               + mini("Vinieron", vin, "#00C853")
-               + mini("No vinieron", novin, "#FF5252")
-               + mini("Compraron", comp, "#00E5FF")
+               + mini("Vinieron", vin, "#00A344")
+               + mini("No vinieron", novin, "#E5484D")
+               + mini("Compraron", comp, "#00B8D4")
                + mini("Conversión", conv_txt))
     html(f"<div style='{CARD}'>"
-         f"<div style='font-size:12px;color:#8A8F94;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px'>"
+         f"<div style='font-size:12px;color:#8A909C;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px'>"
          f"Agenda de visitas · {periodo_txt}</div>"
          f"<div style='display:flex;flex-wrap:wrap'>{fila_ag}</div>"
-         f"<div style='font-size:12px;color:#6E7276;margin-top:6px'>Compró = firmó y activó la moto · conversión sobre los que vinieron</div></div>")
+         f"<div style='font-size:12px;color:#8A909C;margin-top:6px'>Compró = firmó y activó la moto · conversión sobre los que vinieron</div></div>")
 else:
     st.caption("🗓️ Agenda de visitas: sin datos todavía — se activa al llenar el Embudo Comercial en 📤 Actualizar datos.")
 
@@ -374,7 +374,7 @@ if not data["rec"]["semanal"].empty:
         fig.add_trace(go.Bar(x=sem["semana"], y=sem["meta"], name="Meta de la semana", marker_color="#3A3A3A"))
         fig.add_trace(go.Bar(x=sem["semana"], y=sem["ingreso_real"], name="Ingreso real", marker_color=COLOR_OK))
         fig.update_layout(barmode="overlay", height=360, legend=dict(orientation="h", y=1.15),
-                          paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#F2F2F2")
+                          paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#1A1D23")
         st.plotly_chart(fig, use_container_width=True)
 
 with st.expander("🎯 Metas del mes"):

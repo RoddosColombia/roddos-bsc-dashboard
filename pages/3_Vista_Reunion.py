@@ -4,15 +4,16 @@ import streamlit as st
 import acceso
 import metricas as mx
 import data_sources as ds
-from utils import cop, estilo_roddos, html, hsafe, kpi, hero, CARD
+from utils import cop, estilo_roddos, encabezado, html, hsafe, kpi, hero, CARD
 
 st.set_page_config(page_title="Vista de reunión — RODDOS BSC", layout="wide", page_icon="🗓️")
 estilo_roddos()
+encabezado("Vista de reunión")
 
-COLOR_OK = "#00C853"
-COLOR_ALERTA = "#FFB300"
-COLOR_CRIT = "#FF5252"
-COLOR_NEUTRO = "#9AA0A6"
+COLOR_OK = "#00A344"
+COLOR_ALERTA = "#E08600"
+COLOR_CRIT = "#E5484D"
+COLOR_NEUTRO = "#5B616E"
 
 RUBROS_PORCENTAJE = {"pct_aprobacion", "pct_conversion_agenda"}
 RUBROS_SIN_META = {"cuotas_mes", "vencidas_num", "vencidas_dinero"}
@@ -47,7 +48,6 @@ def fmt_valor(clave, valor, es_dinero):
     return f"{valor:,.0f}".replace(",", ".")
 
 
-st.title("🗓️ Vista de reunión")
 st.caption(
     "Para proyectar en pantalla y recorrer en 15 minutos. Un renglón por indicador, "
     "semáforo contra la meta del mes — no discute datos, discute desviaciones."
@@ -95,13 +95,13 @@ for nombre_etapa, claves in mx.ETAPAS:
             txt, color = "referencia", COLOR_NEUTRO
         else:
             txt, color = estado(val, objetivo, es_negativo_malo=(clave == "mora_total"))
-        filas += (f"<div style='display:flex;justify-content:space-between;align-items:center;padding:9px 2px;border-top:1px solid #262626'>"
-                  f"<span style='font-size:14px;color:#D0D3D6'>{hsafe(mx.RUBRO_LABEL[clave])}</span>"
+        filas += (f"<div style='display:flex;justify-content:space-between;align-items:center;padding:9px 2px;border-top:1px solid #EEF0F3'>"
+                  f"<span style='font-size:14px;color:#3A3F4A'>{hsafe(mx.RUBRO_LABEL[clave])}</span>"
                   f"<span style='display:flex;align-items:center;gap:10px'>"
-                  f"<span style='font-size:14px;font-weight:700;color:#F2F2F2'>{hsafe(fmt_valor(clave, val, es_dinero))}</span>"
+                  f"<span style='font-size:14px;font-weight:700;color:#1A1D23'>{hsafe(fmt_valor(clave, val, es_dinero))}</span>"
                   f"<span style='font-size:11px;color:{color};min-width:74px;text-align:right'>● {txt}</span></span></div>")
     if corte:
-        filas += f"<div style='font-size:11px;color:#6E7276;margin-top:8px'>Corte: {corte}</div>"
+        filas += f"<div style='font-size:11px;color:#8A909C;margin-top:8px'>Corte: {corte}</div>"
     html(f"<div style='{CARD}margin-bottom:12px'>{filas}</div>")
 
 st.subheader("💰 Tesorería")

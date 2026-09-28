@@ -1,14 +1,14 @@
 import streamlit as st
 import plotly.graph_objects as go
-from utils import cop, estilo_roddos, kpi
+from utils import cop, estilo_roddos, encabezado, kpi
 import acceso
 import data_sources as ds
 
 st.set_page_config(page_title="RRHH — RODDOS BSC", layout="wide", page_icon="👥")
 estilo_roddos()
 acceso.exigir_director()
+encabezado("RRHH · Nómina y equipo")
 
-st.title("👥 RRHH — Nómina y equipo")
 st.caption("Calculado desde la última carga de Control_RRHH_Nomina_RODDOS_2026.xlsx. La nómina se liquida una vez al mes, no a diario, por eso no sigue el esquema ayer/semana/mes.")
 
 rrhh = ds.leer_rrhh()
@@ -41,10 +41,10 @@ st.write("")
 st.subheader("Costo total empresa por persona")
 nom = rrhh["nomina"]
 fig = go.Figure()
-fig.add_trace(go.Bar(x=nom["Empleado"], y=nom["COSTO TOTAL EMPRESA/MES"], marker_color="#00E5FF", name="Costo total empresa"))
+fig.add_trace(go.Bar(x=nom["Empleado"], y=nom["COSTO TOTAL EMPRESA/MES"], marker_color="#00B8D4", name="Costo total empresa"))
 fig.add_trace(go.Bar(x=nom["Empleado"], y=nom["Total devengado"], marker_color="#3A6E7A", name="Total devengado"))
 fig.update_layout(barmode="group", yaxis_title="$/mes", height=420, legend=dict(orientation="h", y=1.1),
-                  paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#F2F2F2")
+                  paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#1A1D23")
 st.plotly_chart(fig, use_container_width=True)
 st.caption("Costo total empresa incluye aportes patronales y provisión de prestaciones; total devengado es lo que recibe el empleado.")
 

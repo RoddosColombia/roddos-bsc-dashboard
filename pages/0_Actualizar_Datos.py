@@ -10,12 +10,12 @@ import acceso
 import data_sources as ds
 import respaldo
 import validators as val
-from utils import estilo_roddos
+from utils import estilo_roddos, encabezado
 
 st.set_page_config(page_title="Actualizar datos — RODDOS BSC", layout="wide", page_icon="📤")
 estilo_roddos()
+encabezado("Actualizar datos")
 
-st.title("📤 Actualizar datos")
 st.caption(
     "RODDOS BSC vive en Streamlit Community Cloud, que no tiene acceso a OneDrive/SharePoint. "
     "Por eso cada tablero se alimenta de la última versión que se suba aquí — no hay conexión en vivo. "
