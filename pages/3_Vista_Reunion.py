@@ -14,7 +14,7 @@ COLOR_ALERTA = "#FFB300"
 COLOR_CRIT = "#FF5252"
 COLOR_NEUTRO = "#9AA0A6"
 
-RUBROS_PORCENTAJE = {"pct_aprobacion"}
+RUBROS_PORCENTAJE = {"pct_aprobacion", "pct_conversion_agenda"}
 RUBROS_SIN_META = {"cuotas_mes", "vencidas_num", "vencidas_dinero"}
 
 

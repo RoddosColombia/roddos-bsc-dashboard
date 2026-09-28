@@ -56,7 +56,7 @@ if conc["problemas"]:
 
 
 RUBROS_SIN_META = {"cuotas_mes", "vencidas_num", "vencidas_dinero"}
-RUBROS_PORCENTAJE = {"pct_aprobacion"}
+RUBROS_PORCENTAJE = {"pct_aprobacion", "pct_conversion_agenda"}
 
 
 def estado_chip(valor, meta_esperada_a_hoy, es_negativo_malo=False):
@@ -263,6 +263,34 @@ for nombre_etapa, claves in mx.ETAPAS:
               f"<span style='font-size:14px;font-weight:700;color:#F2F2F2'>{hsafe(valtxt)}</span>"
               f"<span style='width:9px;height:9px;border-radius:50%;background:{dotc}'></span></span></div>")
 html(f"<div style='{CARD}'>{filas}</div>")
+
+# ---- Agenda de visitas ----
+st.write("")
+ag_tot = M.get("agendas_totales", {}).get(periodo)
+if ag_tot is not None:
+    vin = M["agendas_cumplidas_ayer"].get(periodo) or 0
+    novin = M["agendas_incumplidas"].get(periodo) or 0
+    comp = M["agendas_compraron"].get(periodo) or 0
+    conv_p = comp / vin if vin else None
+    conv_txt = f"{conv_p*100:.0f}%" if conv_p is not None else "—"
+
+    def mini(lbl, val, color="#FFFFFF"):
+        return (f"<div style='flex:1;text-align:center;padding:6px'>"
+                f"<div style='color:#9AA0A6;font-size:11px;text-transform:uppercase;letter-spacing:0.04em'>{lbl}</div>"
+                f"<div style='font-family:Montserrat,sans-serif;font-weight:800;font-size:22px;color:{color}'>{val}</div></div>")
+
+    fila_ag = (mini("Agendadas", ag_tot)
+               + mini("Vinieron", vin, "#00C853")
+               + mini("No vinieron", novin, "#FF5252")
+               + mini("Compraron", comp, "#00E5FF")
+               + mini("Conversión", conv_txt))
+    html(f"<div style='{CARD}'>"
+         f"<div style='font-size:12px;color:#8A8F94;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px'>"
+         f"Agenda de visitas · {periodo_txt}</div>"
+         f"<div style='display:flex;flex-wrap:wrap'>{fila_ag}</div>"
+         f"<div style='font-size:12px;color:#6E7276;margin-top:6px'>Compró = firmó y activó la moto · conversión sobre los que vinieron</div></div>")
+else:
+    st.caption("🗓️ Agenda de visitas: sin datos todavía — se activa al llenar el Embudo Comercial en 📤 Actualizar datos.")
 
 # ============ Detalle completo (todos los rubros del período) ============
 with st.expander(f"📊 Ver todo el detalle · {periodo_txt}"):

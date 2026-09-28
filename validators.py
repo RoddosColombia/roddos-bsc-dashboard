@@ -86,6 +86,7 @@ def validar_rrhh(wb):
 CANALES_VALIDOS = {"Meta Ads", "Google Ads", "Referido", "Walk-in / punto fisico", "WhatsApp organico", "TikTok"}
 DECISIONES_VALIDAS = {"Aprobado", "Rechazado", None}
 ESTADOS_AGENDA_VALIDOS = {"Pendiente", "Cumplida", "No cumplida", "No aplica", None}
+RESULTADO_VISITA_VALIDOS = {"Compró", "No compró", "Pendiente", None}
 
 
 def validar_embudo(wb):
@@ -139,6 +140,11 @@ def validar_embudo(wb):
             e_agenda = row[idx["Estado agenda"]]
             if f_agenda is not None and e_agenda is None:
                 errores.append(f"Fila {i}: tiene fecha de agenda pero no tiene 'Estado agenda' — no se va a poder contar como cumplida o no.")
+
+        if "Resultado visita" in idx:
+            resultado = row[idx["Resultado visita"]]
+            if resultado not in RESULTADO_VISITA_VALIDOS:
+                errores.append(f"Fila {i}: el resultado de visita '{resultado}' no es válido — usa el desplegable (Compró / No compró / Pendiente).")
 
     return errores
 

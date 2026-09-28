@@ -10,7 +10,7 @@ import data_sources as ds
 ETAPAS = [
     ("1 · Demanda", ["leads"]),
     ("2 · Crédito", ["formularios", "aprobados_rechazados", "pct_aprobacion"]),
-    ("3 · Agenda", ["agendas_totales", "agendas_hoy", "agendas_cumplidas_ayer", "agendas_incumplidas"]),
+    ("3 · Agenda", ["agendas_totales", "agendas_hoy", "agendas_cumplidas_ayer", "agendas_incumplidas", "agendas_compraron", "pct_conversion_agenda"]),
     ("4 · Venta", ["ventas", "ci_completas", "ci_parciales", "ci_dinero"]),
     ("5 · Facturación y entrega", ["facturacion", "activaciones"]),
     ("6 · Cartera y mora", ["cuotas_mes", "pagos_num", "pagos_dinero", "vencidas_num", "vencidas_dinero", "mora_total"]),
@@ -20,6 +20,7 @@ ETAPAS = [
 RUBROS_ORDEN = [
     "leads", "formularios", "aprobados_rechazados", "pct_aprobacion",
     "agendas_totales", "agendas_hoy", "agendas_cumplidas_ayer", "agendas_incumplidas",
+    "agendas_compraron", "pct_conversion_agenda",
     "ventas", "facturacion",
     "ci_completas", "ci_parciales", "ci_dinero", "activaciones",
     "cuotas_mes", "pagos_num", "pagos_dinero", "vencidas_num", "vencidas_dinero",
@@ -35,6 +36,8 @@ RUBRO_LABEL = {
     "agendas_hoy": "5 · Agendas de visita para hoy",
     "agendas_cumplidas_ayer": "6 · Agendas cumplidas ayer (de todas las que había)",
     "agendas_incumplidas": "7 · No cumplimientos de agenda (mes)",
+    "agendas_compraron": "7b · Compraron tras la visita (firmó y activó)",
+    "pct_conversion_agenda": "7c · % conversión visita → compra",
     "ventas": "8 · Ventas (cuota inicial completa + parcial)",
     "facturacion": "9 · Facturación a cliente",
     "ci_completas": "10 · Cuotas iniciales completas (#)",
@@ -55,6 +58,7 @@ RUBRO_LABEL = {
 RUBROS_SIN_DATO = {
     "leads", "formularios", "aprobados_rechazados", "pct_aprobacion",
     "agendas_totales", "agendas_hoy", "agendas_cumplidas_ayer", "agendas_incumplidas",
+    "agendas_compraron", "pct_conversion_agenda",
 }
 
 
@@ -236,6 +240,27 @@ def construir_metricas():
             ayer=_contar("Fecha agenda visita", ayer_emb, ayer_emb, no_cumplida),
             semana=_contar("Fecha agenda visita", semana_ini_emb, hoy_emb, no_cumplida),
             mes=_contar("Fecha agenda visita", mes_ini_emb, hoy_emb, no_cumplida),
+            fuente=FUENTE_EMBUDO, corte=str(hoy_emb),
+        )
+
+        def compro(m):
+            return m[m["Resultado visita"] == "Compró"] if "Resultado visita" in m.columns else m.iloc[0:0]
+
+        n_compro_ayer = _contar("Fecha agenda visita", ayer_emb, ayer_emb, compro)
+        n_compro_mes = _contar("Fecha agenda visita", mes_ini_emb, hoy_emb, compro)
+        M["agendas_compraron"] = dict(
+            ayer=n_compro_ayer,
+            semana=_contar("Fecha agenda visita", semana_ini_emb, hoy_emb, compro),
+            mes=n_compro_mes,
+            extra=f"{n_compro_ayer} de {n_cumplidas_ayer} que vinieron ayer" if n_cumplidas_ayer else None,
+            fuente=FUENTE_EMBUDO, corte=str(hoy_emb),
+        )
+        cumpl_mes = _contar("Fecha agenda visita", mes_ini_emb, hoy_emb, cumplida)
+        pct_conv_mes = round(n_compro_mes / cumpl_mes, 4) if cumpl_mes else None
+        M["pct_conversion_agenda"] = dict(
+            ayer=None, semana=None, mes=pct_conv_mes,
+            extra=(f"{n_compro_mes} compraron de {cumpl_mes} que vinieron este mes"
+                   if cumpl_mes else "Sin visitas cumplidas este mes"),
             fuente=FUENTE_EMBUDO, corte=str(hoy_emb),
         )
 
