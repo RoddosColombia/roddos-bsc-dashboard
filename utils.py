@@ -79,13 +79,13 @@ def estilo_roddos():
 
 def encabezado(subtitulo=""):
     """Cabecera con el logo de RODDOS en una franja oscura de marca (se ve sobre el fondo claro)."""
-    img = (f"<img src='data:image/png;base64,{LOGO_B64}' style='height:40px'/>"
+    img = (f"<img src='data:image/png;base64,{LOGO_B64}' style='height:56px;display:block'/>"
            if LOGO_B64 else
-           "<span style='color:#fff;font-family:Montserrat,sans-serif;font-weight:800;font-size:26px'>RODDOS</span>")
-    sub = (f"<div style='color:#AEB4BD;font-size:13px;margin-top:4px;font-family:Montserrat,sans-serif'>{subtitulo}</div>"
+           "<span style='color:#fff;font-family:Montserrat,sans-serif;font-weight:800;font-size:34px'>RODDOS</span>")
+    sub = (f"<div style='color:#AEB4BD;font-size:13px;margin-top:6px;font-family:Montserrat,sans-serif'>{subtitulo}</div>"
            if subtitulo else "")
     st.markdown(
-        f"<div style='background:#0F1115;border-radius:16px;padding:16px 22px;margin-bottom:16px'>{img}{sub}</div>",
+        f"<div style='background:#0F1115;border-radius:16px;padding:18px 24px;margin-bottom:16px'>{img}{sub}</div>",
         unsafe_allow_html=True)
 
 
