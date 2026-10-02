@@ -97,8 +97,8 @@ for fuente in FUENTES:
                             st.caption(f"... y {len(errores) - 20} más. Corrige y vuelve a subir.")
                     else:
                         if os.path.exists(fuente["archivo"]):
-                            respaldo = os.path.join(VERSIONES_DIR, os.path.basename(fuente["archivo"]) + ".anterior.xlsx")
-                            shutil.copy2(fuente["archivo"], respaldo)
+                            ruta_respaldo = os.path.join(VERSIONES_DIR, os.path.basename(fuente["archivo"]) + ".anterior.xlsx")
+                            shutil.copy2(fuente["archivo"], ruta_respaldo)
                         subido.seek(0)
                         contenido = subido.read()
                         with open(fuente["archivo"], "wb") as f:
