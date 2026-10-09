@@ -3,3 +3,6 @@ data_raw/
 data/
 __pycache__/
 .pytest_cache/
+.venv/
+venv/
+*.pyc
