@@ -4,10 +4,12 @@ import os
 import streamlit as st
 import plotly.graph_objects as go
 
-from utils import cop, estilo_roddos, encabezado
+from utils import (cop, estilo_roddos, encabezado, pedir_archivos, cargar_o_detener, leer_seguro, mostrar_avisos,
+                   mostrar_frescura)
 import metricas as mx
 import objetivos as obj
 import data_sources as ds
+import historico
 
 st.set_page_config(page_title="RODDOS — Operación diaria", layout="wide", page_icon="🏍️")
 estilo_roddos()
@@ -36,7 +38,12 @@ CARD = "background:#FFFFFF;border:1px solid #E6E8EC;border-radius:16px;padding:1
 
 encabezado("Operación diaria · ayer, esta semana y este mes")
 
-data = mx.construir_metricas()
+_faltan = ds.faltantes(ds.F_RECAUDO, ds.F_INVENTARIO)
+if _faltan:
+    pedir_archivos(_faltan)
+
+data = cargar_o_detener(mx.construir_metricas,
+                        [os.path.basename(ds.F_RECAUDO), os.path.basename(ds.F_INVENTARIO)])
 M = data["metricas"]
 hoy_recaudo = data["hoy_recaudo"]
 hoy_inv = data["hoy_inv"]
@@ -46,6 +53,8 @@ c1, c2, c3 = st.columns(3)
 c1.caption(f"📋 Recaudo — corte {hoy_recaudo}")
 c2.caption(f"📦 Inventario/Ventas — corte {hoy_inv_txt or hoy_inv}")
 c3.caption(f"🎯 Mes de trabajo: {calendar.month_name[hoy_recaudo.month].capitalize()} {hoy_recaudo.year}")
+mostrar_frescura({"Recaudo": hoy_recaudo, "Inventario": data["inv"]["hoy"].get("actualizado_fecha")})
+mostrar_avisos(data.get("avisos"))
 
 conc = data["conc"]
 if conc["problemas"]:
@@ -125,7 +134,7 @@ RUBROS_EMBUDO_TRIADA = ["leads", "formularios", "aprobados_rechazados",
 hay_datos_embudo = M["leads"]["mes"] is not None
 
 # ============ Parámetros de meta ============
-metas = ds.leer_metas(hoy_recaudo)
+metas = leer_seguro(ds.leer_metas, os.path.basename(ds.F_METAS), hoy_recaudo)
 meta_pactada_recaudo = data["rec"]["dashboard"].get("meta_pactada")
 objetivos_mes = {}
 if metas:
@@ -136,8 +145,18 @@ if metas:
 if meta_pactada_recaudo:
     objetivos_mes["pagos_dinero"] = meta_pactada_recaudo
 dias_mes = calendar.monthrange(hoy_recaudo.year, hoy_recaudo.month)[1]
-RUBROS_FUENTE_INVENTARIO = {"ventas", "facturacion", "ci_completas", "ci_parciales", "ci_dinero", "activaciones", "dias_inventario"}
-dia_por_rubro = {c: (hoy_inv.day if c in RUBROS_FUENTE_INVENTARIO else hoy_recaudo.day) for c in mx.RUBROS_ORDEN}
+dia_por_rubro = {c: obj.fecha_corte_rubro(c, hoy_recaudo, hoy_inv).day for c in mx.RUBROS_ORDEN}
+
+# ============ Foto del mes para el histórico ============
+# Una vez por sesión y por fecha de corte (no en cada clic) — ver historico.py
+_clave_foto = f"foto_historico_{hoy_recaudo}_{hoy_inv}"
+if not st.session_state.get(_clave_foto):
+    try:
+        historico.registrar(historico.almacen(),
+                            historico.armar_foto(M, hoy_recaudo, hoy_inv, objetivos_mes))
+        st.session_state[_clave_foto] = True
+    except Exception as e:  # el histórico nunca debe tumbar el tablero
+        st.caption(f"⚠️ No se pudo guardar la foto del histórico: {e}")
 
 # ============ Selector de período (ayer / semana / mes) ============
 st.write("")
@@ -243,7 +262,7 @@ kpi_card(k2, "Cartera vencida · riesgo", fmt_val("vencidas_dinero", cv),
 st.write("")
 
 # ---- Cobranza de la semana ----
-cob = ds.leer_cobranza_semanal()
+cob = leer_seguro(ds.leer_cobranza_semanal, os.path.basename(ds.F_COBRANZA))
 if cob:
     pct = max(0.0, min(1.0, cob["pct_avance"] or 0))
     rango = ""
@@ -354,7 +373,8 @@ with st.expander("📈 Proyección de cierre de mes"):
     for clave, col in zip(rubros_proyectables, proy_cols):
         val = M[clave]["mes"]
         objetivo = objetivos_mes.get(clave)
-        proy, ritmo, ritmo_req = obj.proyeccion_cierre(val, hoy_recaudo.day, dias_mes, objetivo)
+        # cada rubro se proyecta con el día de corte de SU archivo (Recaudo o Inventario)
+        proy, ritmo, ritmo_req = obj.proyeccion_rubro(clave, val, objetivo, hoy_recaudo, hoy_inv)
         es_dinero = clave in ("ci_dinero", "pagos_dinero")
         fmt = cop if es_dinero else (lambda v: f"{v:,.0f}".replace(",", "."))
         with col:

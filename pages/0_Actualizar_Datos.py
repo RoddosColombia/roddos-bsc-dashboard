@@ -1,6 +1,8 @@
+import io
 import os
 import shutil
 import datetime
+import tempfile
 import openpyxl
 import streamlit as st
 
@@ -58,6 +60,26 @@ FUENTES = [
 ]
 
 
+def probar_lectura(fuente, contenido):
+    """Lee el archivo nuevo con el MISMO lector que usará el tablero, sobre una copia
+    temporal, antes de reemplazar nada. Si el lector falla, el archivo se rechaza y los
+    datos anteriores quedan intactos. Devuelve None si todo bien, o el error."""
+    fd, ruta_tmp = tempfile.mkstemp(suffix=".xlsx", prefix="prueba_")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(contenido)
+        fuente["cache"](ruta=ruta_tmp)
+        return None
+    except Exception as e:
+        return e
+    finally:
+        fuente["cache"].clear()  # no dejar en caché la lectura de la copia temporal
+        try:
+            os.remove(ruta_tmp)
+        except OSError:
+            pass
+
+
 def _ultima_actualizacion(path):
     if not os.path.exists(path):
         return "Nunca se ha cargado"
@@ -85,10 +107,25 @@ for fuente in FUENTES:
                 f"Subir {os.path.basename(fuente['archivo'])}",
                 type="xlsx", key=f"up_{fuente['nombre']}", label_visibility="collapsed",
             )
-            if subido is not None:
+            # El cargador conserva el archivo entre recargas de la página: sin esta marca,
+            # cada recarga lo volvería a procesar (y st.rerun() lo haría en bucle).
+            clave_hecho = f"cargado_{fuente['nombre']}"
+            id_subido = (getattr(subido, "file_id", None) or (subido.name, subido.size)) if subido else None
+            if subido is not None and st.session_state.get(clave_hecho) == id_subido:
+                st.success("✅ Cargado. El tablero ya muestra estos datos.")
+            elif subido is not None:
                 try:
-                    wb_check = openpyxl.load_workbook(subido)
+                    subido.seek(0)
+                    contenido = subido.read()
+                    # data_only=True: se validan los VALORES que verá el tablero, no las fórmulas
+                    wb_check = openpyxl.load_workbook(io.BytesIO(contenido), data_only=True)
                     errores = fuente["validador"](wb_check)
+                    if not errores:
+                        fallo = probar_lectura(fuente, contenido)
+                        if fallo is not None:
+                            errores = [f"El archivo tiene las hojas y columnas esperadas, pero el tablero no "
+                                       f"lo pudo leer ({type(fallo).__name__}: {fallo}). Revisa que no tenga "
+                                       "celdas con error (#¡REF!, #¡VALOR!) ni filas de encabezado movidas."]
                     if errores:
                         st.error(f"No se cargó — {len(errores)} problema(s) encontrado(s):")
                         for e in errores[:20]:
@@ -99,11 +136,10 @@ for fuente in FUENTES:
                         if os.path.exists(fuente["archivo"]):
                             ruta_respaldo = os.path.join(VERSIONES_DIR, os.path.basename(fuente["archivo"]) + ".anterior.xlsx")
                             shutil.copy2(fuente["archivo"], ruta_respaldo)
-                        subido.seek(0)
-                        contenido = subido.read()
                         with open(fuente["archivo"], "wb") as f:
                             f.write(contenido)
                         fuente["cache"].clear()
+                        st.session_state[clave_hecho] = id_subido
                         db = ds.db_respaldo()
                         if db is None:
                             st.rerun()

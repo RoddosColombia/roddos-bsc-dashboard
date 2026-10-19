@@ -4,11 +4,18 @@ import streamlit as st
 import acceso
 import metricas as mx
 import data_sources as ds
-from utils import cop, estilo_roddos, encabezado, html, hsafe, kpi, hero, CARD
+import os
+
+from utils import (cop, estilo_roddos, encabezado, html, hsafe, kpi, hero, CARD, pedir_archivos,
+                   cargar_o_detener, leer_seguro, mostrar_avisos, mostrar_frescura)
 
 st.set_page_config(page_title="Vista de reunión — RODDOS BSC", layout="wide", page_icon="🗓️")
 estilo_roddos()
 encabezado("Vista de reunión")
+
+_faltan = ds.faltantes(ds.F_RECAUDO, ds.F_INVENTARIO)
+if _faltan:
+    pedir_archivos(_faltan)
 
 COLOR_OK = "#00A344"
 COLOR_ALERTA = "#E08600"
@@ -53,12 +60,15 @@ st.caption(
     "semáforo contra la meta del mes — no discute datos, discute desviaciones."
 )
 
-data = mx.construir_metricas()
+data = cargar_o_detener(mx.construir_metricas,
+                        [os.path.basename(ds.F_RECAUDO), os.path.basename(ds.F_INVENTARIO)])
 M = data["metricas"]
 hoy_recaudo = data["hoy_recaudo"]
+mostrar_frescura({"Recaudo": hoy_recaudo, "Inventario": data["inv"]["hoy"].get("actualizado_fecha")})
+mostrar_avisos(data.get("avisos"))
 
-metas = ds.leer_metas(hoy_recaudo)
-recaudo = ds.leer_recaudo()
+metas = leer_seguro(ds.leer_metas, os.path.basename(ds.F_METAS), hoy_recaudo)
+recaudo = data["rec"]  # ya se leyó al construir las métricas
 meta_pactada_recaudo = recaudo["dashboard"].get("meta_pactada")
 
 objetivos_mes = {}
@@ -105,8 +115,10 @@ for nombre_etapa, claves in mx.ETAPAS:
     html(f"<div style='{CARD}margin-bottom:12px'>{filas}</div>")
 
 st.subheader("💰 Tesorería")
-if acceso.formulario_director("La caja es solo para directores.") and metas:
-    tes = ds.leer_tesoreria()
+es_director = acceso.formulario_director("La caja es solo para directores.")
+if es_director and ds.faltantes(ds.F_TESORERIA):
+    st.caption("Sin Flujo_Pagos_Deudas.xlsx cargado — súbelo en 📤 Actualizar datos para ver la caja.")
+elif es_director and metas and (tes := leer_seguro(ds.leer_tesoreria, os.path.basename(ds.F_TESORERIA))):
     dash = tes["dashboard"]
     pago_auteco_mes = dash.get("pago_auteco_mes") or 0
     resultado_objetivo = (meta_pactada_recaudo or 0) + metas["ci_dinero"] - metas["gasto_fijo"] - pago_auteco_mes
@@ -118,7 +130,7 @@ if acceso.formulario_director("La caja es solo para directores.") and metas:
             chip_txt="en verde" if resultado_objetivo >= 0 else "en rojo",
             chip_color=COLOR_OK if resultado_objetivo >= 0 else COLOR_CRIT,
             sub="recaudo + CI − gasto fijo − Auteco")
-elif st.session_state.get("es_director"):
+elif es_director and not metas:
     st.caption("Sin Metas_RODDOS.xlsx cargado — no se puede calcular el resultado objetivo del mes.")
 
 st.divider()

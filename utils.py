@@ -96,6 +96,72 @@ def html(s):
     st.markdown(s, unsafe_allow_html=True)
 
 
+def pedir_archivos(faltantes):
+    """Muestra qué archivos faltan para esta página y detiene la ejecución sin error.
+
+    Se usa cuando data_raw/ no tiene los Excel que la página necesita (instalación
+    nueva, servidor reiniciado sin respaldo, etc.), en vez de dejar que la app se
+    caiga con FileNotFoundError.
+    """
+    lista = "\n".join(f"- `{n}`" for n in faltantes)
+    st.info(
+        "📂 **Todavía no hay datos para mostrar esta página.**\n\n"
+        "Sube estos archivos en **📤 Actualizar datos** (menú de la izquierda):\n\n"
+        f"{lista}"
+    )
+    st.stop()
+
+
+def leer_seguro(lector, archivo, *args, **kwargs):
+    """Para fuentes OPCIONALES de una página: si la lectura falla, muestra un aviso
+    y devuelve None, y el resto de la página sigue funcionando."""
+    try:
+        return lector(*args, **kwargs)
+    except Exception as e:
+        st.warning(f"⚠️ No se pudo leer **{archivo}** ({type(e).__name__}: {e}). "
+                   "Esa sección queda sin datos; revisa el archivo y vuelve a subirlo en 📤 Actualizar datos.")
+        return None
+
+
+def cargar_o_detener(lector, archivos, *args, **kwargs):
+    """Para la fuente PRINCIPAL de una página: si la lectura falla, muestra un mensaje
+    claro (en vez del error técnico de Python) y detiene la página."""
+    try:
+        return lector(*args, **kwargs)
+    except Exception as e:
+        nombres = ", ".join(f"**{a}**" for a in ([archivos] if isinstance(archivos, str) else archivos))
+        st.error(f"No se pudieron leer los datos de {nombres}. Lo más probable es que el archivo cargado "
+                 "tenga un formato distinto al esperado. Súbelo de nuevo en 📤 Actualizar datos; si el "
+                 "problema sigue, comparte este detalle con quien mantiene el tablero:")
+        st.code(f"{type(e).__name__}: {e}")
+        st.stop()
+
+
+def mostrar_frescura(cortes):
+    """Aviso de datos desactualizados. `cortes`: {fuente: fecha de corte}. Ver frescura.py."""
+    import frescura
+
+    res = frescura.revisar(cortes)
+    nivel = frescura.nivel_general(res)
+    if nivel == frescura.AL_DIA:
+        st.caption("✅ Datos al día · " + " · ".join(r["texto"] for r in res))
+        return
+    lineas = "\n".join(f"- {'🔴' if r['nivel'] == frescura.GRAVE else '⚠️' if r['nivel'] != frescura.AL_DIA else '✅'} "
+                       f"{r['texto']}" for r in res)
+    cuerpo = ("Los números de esta página corresponden a esas fechas, no a hoy. "
+              "Los responsables de cada archivo deben actualizarlo en SharePoint y subirlo en "
+              "📤 Actualizar datos (ver instructivo).")
+    if nivel == frescura.GRAVE:
+        st.error(f"**Los datos no están al día.**\n\n{lineas}\n\n{cuerpo}")
+    else:
+        st.warning(f"**Algunos datos están atrasados.**\n\n{lineas}\n\n{cuerpo}")
+
+
+def mostrar_avisos(avisos):
+    for a in avisos or []:
+        st.warning(f"⚠️ {a}")
+
+
 def hsafe(s):
     """'$' como entidad HTML: se ve como $ y no dispara KaTeX dentro de HTML."""
     return str(s).replace("$", "&#36;")

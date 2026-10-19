@@ -69,12 +69,25 @@ def test_restaurar_crea_la_carpeta_si_no_existe(db, tmp_path):
     assert ruta.read_bytes() == b"a"
 
 
-@pytest.mark.skipif(not os.path.exists(SECRETS), reason="sin .streamlit/secrets.toml")
-def test_conexion_real_atlas():
+def _config_mongo_real():
+    """La sección [mongo] de secrets.toml, solo si existe y tiene una URI de verdad."""
+    if not os.path.exists(SECRETS):
+        return None
     with open(SECRETS, "rb") as f:
-        cfg = tomllib.load(f)["mongo"]
-    if "PEGA_AQUI" in cfg["uri"]:
-        pytest.skip("secrets.toml todavía tiene el texto de ejemplo")
+        cfg = tomllib.load(f).get("mongo")
+    if not cfg or "PEGA_AQUI" in cfg.get("uri", ""):
+        return None
+    return cfg
+
+
+@pytest.mark.skipif(os.environ.get("RODDOS_PROBAR_MONGO") != "1",
+                    reason="prueba contra Mongo real: solo si RODDOS_PROBAR_MONGO=1")
+def test_conexion_real_atlas():
+    """Escribe y borra un documento de prueba en la base REAL. Por eso no corre por
+    defecto: hay que pedirlo explícitamente (ver docs/PROGRESO.md)."""
+    cfg = _config_mongo_real()
+    if cfg is None:
+        pytest.skip("secrets.toml no tiene una sección [mongo] configurada")
     db = respaldo.conectar(cfg["uri"], cfg["db"])
     respaldo.guardar(db, "_prueba_conexion.xlsx", b"ok")
     assert db.archivos.find_one({"_id": "_prueba_conexion.xlsx"})["actual"] == b"ok"

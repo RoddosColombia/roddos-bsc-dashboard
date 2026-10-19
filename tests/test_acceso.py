@@ -79,7 +79,7 @@ def test_sin_clave_configurada_queda_cerrado():
     assert "no está configurada" in _texto(at)
 
 
-def test_vista_reunion_oculta_caja_sin_clave():
+def test_vista_reunion_oculta_caja_sin_clave(datos_prueba):
     at = _pagina("3_Vista_Reunion.py")
     at.run()
     assert not at.exception
@@ -87,7 +87,7 @@ def test_vista_reunion_oculta_caja_sin_clave():
     assert "Caja disponible total" not in _texto(at)
 
 
-def test_vista_reunion_muestra_caja_con_clave():
+def test_vista_reunion_muestra_caja_con_clave(datos_prueba):
     at = _pagina("3_Vista_Reunion.py")
     at.run()
     _entrar(at, CLAVE)

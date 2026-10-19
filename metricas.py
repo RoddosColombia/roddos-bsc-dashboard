@@ -4,6 +4,8 @@ Cada rubro declara su propia fecha de corte (no todos los archivos se
 actualizan el mismo día) para no fingir una sola fecha "hoy" común.
 """
 import datetime
+import os
+
 import pandas as pd
 import data_sources as ds
 
@@ -68,10 +70,24 @@ def _semana_iso(fecha):
     return fecha.isocalendar()[1]
 
 
+def _aviso(archivo, error):
+    return (f"No se pudo leer **{archivo}** ({type(error).__name__}: {error}). "
+            "Esa sección queda sin datos; el resto del tablero funciona normal. "
+            "Revisa el archivo y vuelve a subirlo en 📤 Actualizar datos.")
+
+
 def construir_metricas():
+    """Recaudo e Inventario son obligatorios: si fallan, la excepción sube y la página
+    decide qué mostrar. Conciliación y Embudo son opcionales: si fallan, se registra
+    un aviso en `avisos` y sus rubros quedan "sin dato", sin tumbar el resto."""
+    avisos = []
     inv = ds.leer_inventario()
     rec = ds.leer_recaudo()
-    conc = ds.leer_conciliacion()
+    try:
+        conc = ds.leer_conciliacion()
+    except Exception as e:
+        conc = dict(problemas=[], n_pagos_sin_registrar=0, monto_en_riesgo=0)
+        avisos.append(_aviso(os.path.basename(ds.F_CONCILIACION), e))
 
     cuotas = rec["cuotas"].copy()
     cuotas["Fecha prog."] = pd.to_datetime(cuotas["Fecha prog."], errors="coerce")
@@ -141,7 +157,7 @@ def construir_metricas():
     M["ci_dinero"] = dict(ayer=None, semana=None, mes=h["ci_mes"],
                            fuente="Inventario_2026.xlsx · Dashboard", corte=str(hoy_inv))
     M["activaciones"] = dict(ayer=None, semana=None, mes=h["activadas_mes"],
-                              extra=f"Acumulado 2026: {sum(m['activadas'] or 0 for m in inv['mensual'].to_dict('records'))} activadas",
+                              extra=f"Acumulado {hoy_inv.year}: {sum(m['activadas'] or 0 for m in inv['mensual'].to_dict('records'))} activadas",
                               fuente="Inventario_2026.xlsx · Dashboard", corte=str(hoy_inv))
     M["inventario_disponible"] = dict(ayer=None, semana=None, mes=h["disp_total"],
                                        extra=f"Raider {h['disp_raider']} · Sport {h['disp_sport']} · Apache {h['disp_apache']}",
@@ -160,109 +176,115 @@ def construir_metricas():
         fuente="Calculado: motos disponibles ÷ ritmo de venta del mes", corte=str(hoy_inv),
     )
 
-    # ---------- embudo comercial (leads, formularios, decisiones, agendas) ----------
-    embudo = ds.leer_embudo()
-    FUENTE_EMBUDO = "Embudo_Comercial_RODDOS.xlsx · Embudo_Diario"
-    if embudo.empty:
+    try:
+        # ---------- embudo comercial (leads, formularios, decisiones, agendas) ----------
+        embudo = ds.leer_embudo()
+        FUENTE_EMBUDO = "Embudo_Comercial_RODDOS.xlsx · Embudo_Diario"
+        if embudo.empty:
+            for r in RUBROS_SIN_DATO:
+                M[r] = dict(ayer=None, semana=None, mes=None,
+                            fuente="Sin dato aún — se activa al llenar Plantilla_Embudo_Comercial.xlsx", corte=None)
+        else:
+            hoy_emb = hoy_recaudo
+            ayer_emb = hoy_emb - datetime.timedelta(days=1)
+            semana_ini_emb = hoy_emb - datetime.timedelta(days=hoy_emb.weekday())
+            mes_ini_emb = hoy_emb.replace(day=1)
+
+            def _contar(col, desde, hasta, filtro=None):
+                # dropna primero: una serie de fecha totalmente vacia (NaT) puede
+                # quedar con un dtype que .dt.date compara mal contra un date de Python
+                con_fecha = embudo[embudo[col].notna()]
+                s = con_fecha[col]
+                m = con_fecha[(s.dt.date >= desde) & (s.dt.date <= hasta)]
+                if filtro is not None:
+                    m = filtro(m)
+                return len(m)
+
+            M["leads"] = dict(
+                ayer=_contar("Fecha lead", ayer_emb, ayer_emb),
+                semana=_contar("Fecha lead", semana_ini_emb, hoy_emb),
+                mes=_contar("Fecha lead", mes_ini_emb, hoy_emb),
+                fuente=FUENTE_EMBUDO, corte=str(hoy_emb),
+            )
+            M["formularios"] = dict(
+                ayer=_contar("Fecha formulario", ayer_emb, ayer_emb),
+                semana=_contar("Fecha formulario", semana_ini_emb, hoy_emb),
+                mes=_contar("Fecha formulario", mes_ini_emb, hoy_emb),
+                fuente=FUENTE_EMBUDO, corte=str(hoy_emb),
+            )
+            aprob = lambda m: m[m["Decision"] == "Aprobado"]
+            rech = lambda m: m[m["Decision"] == "Rechazado"]
+            n_aprob_mes = _contar("Fecha decision", mes_ini_emb, hoy_emb, aprob)
+            n_rech_mes = _contar("Fecha decision", mes_ini_emb, hoy_emb, rech)
+            M["aprobados_rechazados"] = dict(
+                ayer=_contar("Fecha decision", ayer_emb, ayer_emb),
+                semana=_contar("Fecha decision", semana_ini_emb, hoy_emb),
+                mes=n_aprob_mes + n_rech_mes,
+                extra=f"Del mes: {n_aprob_mes} aprobados · {n_rech_mes} rechazados",
+                fuente=FUENTE_EMBUDO, corte=str(hoy_emb),
+            )
+            total_decididas_mes = n_aprob_mes + n_rech_mes
+            pct_aprob_mes = round(n_aprob_mes / total_decididas_mes, 4) if total_decididas_mes else None
+            M["pct_aprobacion"] = dict(
+                ayer=None, semana=None, mes=pct_aprob_mes,
+                extra=(f"{n_aprob_mes} de {total_decididas_mes} decisiones del mes"
+                       if total_decididas_mes else "Sin decisiones registradas este mes"),
+                fuente=FUENTE_EMBUDO, corte=str(hoy_emb),
+            )
+            M["agendas_totales"] = dict(
+                ayer=_contar("Fecha agenda visita", ayer_emb, ayer_emb),
+                semana=_contar("Fecha agenda visita", semana_ini_emb, hoy_emb),
+                mes=_contar("Fecha agenda visita", mes_ini_emb, hoy_emb),
+                fuente=FUENTE_EMBUDO, corte=str(hoy_emb),
+            )
+            M["agendas_hoy"] = dict(
+                ayer=None, semana=None, mes=_contar("Fecha agenda visita", hoy_emb, hoy_emb),
+                extra="Snapshot de hoy (no acumulado del mes)",
+                fuente=FUENTE_EMBUDO, corte=str(hoy_emb),
+            )
+            cumplida = lambda m: m[m["Estado agenda"] == "Cumplida"]
+            n_agendas_ayer = _contar("Fecha agenda visita", ayer_emb, ayer_emb)
+            n_cumplidas_ayer = _contar("Fecha agenda visita", ayer_emb, ayer_emb, cumplida)
+            M["agendas_cumplidas_ayer"] = dict(
+                ayer=n_cumplidas_ayer,
+                semana=_contar("Fecha agenda visita", semana_ini_emb, hoy_emb, cumplida),
+                mes=_contar("Fecha agenda visita", mes_ini_emb, hoy_emb, cumplida),
+                extra=f"{n_cumplidas_ayer} de {n_agendas_ayer} programadas ayer",
+                fuente=FUENTE_EMBUDO, corte=str(hoy_emb),
+            )
+            no_cumplida = lambda m: m[m["Estado agenda"] == "No cumplida"]
+            M["agendas_incumplidas"] = dict(
+                ayer=_contar("Fecha agenda visita", ayer_emb, ayer_emb, no_cumplida),
+                semana=_contar("Fecha agenda visita", semana_ini_emb, hoy_emb, no_cumplida),
+                mes=_contar("Fecha agenda visita", mes_ini_emb, hoy_emb, no_cumplida),
+                fuente=FUENTE_EMBUDO, corte=str(hoy_emb),
+            )
+
+            def compro(m):
+                return m[m["Resultado visita"] == "Compró"] if "Resultado visita" in m.columns else m.iloc[0:0]
+
+            n_compro_ayer = _contar("Fecha agenda visita", ayer_emb, ayer_emb, compro)
+            n_compro_mes = _contar("Fecha agenda visita", mes_ini_emb, hoy_emb, compro)
+            M["agendas_compraron"] = dict(
+                ayer=n_compro_ayer,
+                semana=_contar("Fecha agenda visita", semana_ini_emb, hoy_emb, compro),
+                mes=n_compro_mes,
+                extra=f"{n_compro_ayer} de {n_cumplidas_ayer} que vinieron ayer" if n_cumplidas_ayer else None,
+                fuente=FUENTE_EMBUDO, corte=str(hoy_emb),
+            )
+            cumpl_mes = _contar("Fecha agenda visita", mes_ini_emb, hoy_emb, cumplida)
+            pct_conv_mes = round(n_compro_mes / cumpl_mes, 4) if cumpl_mes else None
+            M["pct_conversion_agenda"] = dict(
+                ayer=None, semana=None, mes=pct_conv_mes,
+                extra=(f"{n_compro_mes} compraron de {cumpl_mes} que vinieron este mes"
+                       if cumpl_mes else "Sin visitas cumplidas este mes"),
+                fuente=FUENTE_EMBUDO, corte=str(hoy_emb),
+            )
+    except Exception as e:
+        avisos.append(_aviso(os.path.basename(ds.F_EMBUDO), e))
         for r in RUBROS_SIN_DATO:
             M[r] = dict(ayer=None, semana=None, mes=None,
-                        fuente="Sin dato aún — se activa al llenar Plantilla_Embudo_Comercial.xlsx", corte=None)
-    else:
-        hoy_emb = hoy_recaudo
-        ayer_emb = hoy_emb - datetime.timedelta(days=1)
-        semana_ini_emb = hoy_emb - datetime.timedelta(days=hoy_emb.weekday())
-        mes_ini_emb = hoy_emb.replace(day=1)
-
-        def _contar(col, desde, hasta, filtro=None):
-            # dropna primero: una serie de fecha totalmente vacia (NaT) puede
-            # quedar con un dtype que .dt.date compara mal contra un date de Python
-            con_fecha = embudo[embudo[col].notna()]
-            s = con_fecha[col]
-            m = con_fecha[(s.dt.date >= desde) & (s.dt.date <= hasta)]
-            if filtro is not None:
-                m = filtro(m)
-            return len(m)
-
-        M["leads"] = dict(
-            ayer=_contar("Fecha lead", ayer_emb, ayer_emb),
-            semana=_contar("Fecha lead", semana_ini_emb, hoy_emb),
-            mes=_contar("Fecha lead", mes_ini_emb, hoy_emb),
-            fuente=FUENTE_EMBUDO, corte=str(hoy_emb),
-        )
-        M["formularios"] = dict(
-            ayer=_contar("Fecha formulario", ayer_emb, ayer_emb),
-            semana=_contar("Fecha formulario", semana_ini_emb, hoy_emb),
-            mes=_contar("Fecha formulario", mes_ini_emb, hoy_emb),
-            fuente=FUENTE_EMBUDO, corte=str(hoy_emb),
-        )
-        aprob = lambda m: m[m["Decision"] == "Aprobado"]
-        rech = lambda m: m[m["Decision"] == "Rechazado"]
-        n_aprob_mes = _contar("Fecha decision", mes_ini_emb, hoy_emb, aprob)
-        n_rech_mes = _contar("Fecha decision", mes_ini_emb, hoy_emb, rech)
-        M["aprobados_rechazados"] = dict(
-            ayer=_contar("Fecha decision", ayer_emb, ayer_emb),
-            semana=_contar("Fecha decision", semana_ini_emb, hoy_emb),
-            mes=n_aprob_mes + n_rech_mes,
-            extra=f"Del mes: {n_aprob_mes} aprobados · {n_rech_mes} rechazados",
-            fuente=FUENTE_EMBUDO, corte=str(hoy_emb),
-        )
-        total_decididas_mes = n_aprob_mes + n_rech_mes
-        pct_aprob_mes = round(n_aprob_mes / total_decididas_mes, 4) if total_decididas_mes else None
-        M["pct_aprobacion"] = dict(
-            ayer=None, semana=None, mes=pct_aprob_mes,
-            extra=(f"{n_aprob_mes} de {total_decididas_mes} decisiones del mes"
-                   if total_decididas_mes else "Sin decisiones registradas este mes"),
-            fuente=FUENTE_EMBUDO, corte=str(hoy_emb),
-        )
-        M["agendas_totales"] = dict(
-            ayer=_contar("Fecha agenda visita", ayer_emb, ayer_emb),
-            semana=_contar("Fecha agenda visita", semana_ini_emb, hoy_emb),
-            mes=_contar("Fecha agenda visita", mes_ini_emb, hoy_emb),
-            fuente=FUENTE_EMBUDO, corte=str(hoy_emb),
-        )
-        M["agendas_hoy"] = dict(
-            ayer=None, semana=None, mes=_contar("Fecha agenda visita", hoy_emb, hoy_emb),
-            extra="Snapshot de hoy (no acumulado del mes)",
-            fuente=FUENTE_EMBUDO, corte=str(hoy_emb),
-        )
-        cumplida = lambda m: m[m["Estado agenda"] == "Cumplida"]
-        n_agendas_ayer = _contar("Fecha agenda visita", ayer_emb, ayer_emb)
-        n_cumplidas_ayer = _contar("Fecha agenda visita", ayer_emb, ayer_emb, cumplida)
-        M["agendas_cumplidas_ayer"] = dict(
-            ayer=n_cumplidas_ayer,
-            semana=_contar("Fecha agenda visita", semana_ini_emb, hoy_emb, cumplida),
-            mes=_contar("Fecha agenda visita", mes_ini_emb, hoy_emb, cumplida),
-            extra=f"{n_cumplidas_ayer} de {n_agendas_ayer} programadas ayer",
-            fuente=FUENTE_EMBUDO, corte=str(hoy_emb),
-        )
-        no_cumplida = lambda m: m[m["Estado agenda"] == "No cumplida"]
-        M["agendas_incumplidas"] = dict(
-            ayer=_contar("Fecha agenda visita", ayer_emb, ayer_emb, no_cumplida),
-            semana=_contar("Fecha agenda visita", semana_ini_emb, hoy_emb, no_cumplida),
-            mes=_contar("Fecha agenda visita", mes_ini_emb, hoy_emb, no_cumplida),
-            fuente=FUENTE_EMBUDO, corte=str(hoy_emb),
-        )
-
-        def compro(m):
-            return m[m["Resultado visita"] == "Compró"] if "Resultado visita" in m.columns else m.iloc[0:0]
-
-        n_compro_ayer = _contar("Fecha agenda visita", ayer_emb, ayer_emb, compro)
-        n_compro_mes = _contar("Fecha agenda visita", mes_ini_emb, hoy_emb, compro)
-        M["agendas_compraron"] = dict(
-            ayer=n_compro_ayer,
-            semana=_contar("Fecha agenda visita", semana_ini_emb, hoy_emb, compro),
-            mes=n_compro_mes,
-            extra=f"{n_compro_ayer} de {n_cumplidas_ayer} que vinieron ayer" if n_cumplidas_ayer else None,
-            fuente=FUENTE_EMBUDO, corte=str(hoy_emb),
-        )
-        cumpl_mes = _contar("Fecha agenda visita", mes_ini_emb, hoy_emb, cumplida)
-        pct_conv_mes = round(n_compro_mes / cumpl_mes, 4) if cumpl_mes else None
-        M["pct_conversion_agenda"] = dict(
-            ayer=None, semana=None, mes=pct_conv_mes,
-            extra=(f"{n_compro_mes} compraron de {cumpl_mes} que vinieron este mes"
-                   if cumpl_mes else "Sin visitas cumplidas este mes"),
-            fuente=FUENTE_EMBUDO, corte=str(hoy_emb),
-        )
+                        fuente="No se pudo leer el Embudo comercial — ver aviso arriba", corte=None)
 
     return dict(metricas=M, inv=inv, rec=rec, conc=conc, hoy_recaudo=hoy_recaudo,
-                hoy_inv=hoy_inv, hoy_inv_txt=hoy_inv_txt)
+                hoy_inv=hoy_inv, hoy_inv_txt=hoy_inv_txt, avisos=avisos)
