@@ -1,8 +1,13 @@
 import datetime
+
+import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 
-from utils import cop, estilo_roddos, encabezado, html, hsafe, kpi, hero
+import os
+
+from utils import (cop, estilo_roddos, encabezado, html, hsafe, kpi, hero, pedir_archivos, cargar_o_detener,
+                   leer_seguro, mostrar_frescura)
 import acceso
 import data_sources as ds
 
@@ -11,16 +16,24 @@ estilo_roddos()
 acceso.exigir_director()
 encabezado("Tesorería y flujo de caja")
 
+_faltan = ds.faltantes(ds.F_TESORERIA)
+if _faltan:
+    pedir_archivos(_faltan)
+
 COLOR_OK = "#00A344"
 COLOR_ALERTA = "#E08600"
 COLOR_CRIT = "#E5484D"
 
-tes = ds.leer_tesoreria()
+tes = cargar_o_detener(ds.leer_tesoreria, os.path.basename(ds.F_TESORERIA))
 dash = tes["dashboard"]
 egresos = tes["egresos"]
 ingresos = tes["ingresos"]
 
-hoy = dash["corte_fecha"] or egresos["Fecha"].max().date()
+_ultimo_egreso = egresos["Fecha"].max() if not egresos.empty else None
+hoy = dash["corte_fecha"] or (_ultimo_egreso.date() if _ultimo_egreso is not None and not pd.isna(_ultimo_egreso)
+                              else datetime.date.today())
+mostrar_frescura({"Tesorería": dash["corte_fecha"] or (_ultimo_egreso.date() if _ultimo_egreso is not None
+                                                     and not pd.isna(_ultimo_egreso) else None)})
 ayer = hoy - datetime.timedelta(days=1)
 semana_ini = hoy - datetime.timedelta(days=hoy.weekday())
 
@@ -102,9 +115,9 @@ st.caption(
     "después de los gastos fijos y el pago a Auteco. Fórmula definida por la dirección."
 )
 
-metas = ds.leer_metas()
-recaudo = ds.leer_recaudo()
-meta_pactada_recaudo = recaudo["dashboard"].get("meta_pactada") or 0
+metas = leer_seguro(ds.leer_metas, os.path.basename(ds.F_METAS))
+recaudo = None if ds.faltantes(ds.F_RECAUDO) else leer_seguro(ds.leer_recaudo, os.path.basename(ds.F_RECAUDO))
+meta_pactada_recaudo = (recaudo["dashboard"].get("meta_pactada") if recaudo else None) or 0
 pago_auteco_mes = dash.get("pago_auteco_mes") or 0
 
 if not metas:

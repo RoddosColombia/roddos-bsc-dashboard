@@ -20,6 +20,7 @@ import openpyxl
 import streamlit as st
 from pymongo.errors import PyMongoError
 
+import formatos
 import respaldo
 
 RAW_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data_raw")
@@ -58,26 +59,48 @@ try:
 except PyMongoError as e:
     st.warning(f"No se pudo recuperar el respaldo en la nube: {e}")
 
-MESES_ABR = {1: "ene", 2: "feb", 3: "mar", 4: "abr", 5: "may", 6: "jun",
-             7: "jul", 8: "ago", 9: "sep", 10: "oct", 11: "nov", 12: "dic"}
+def _filas_tabla(ws, fila_ini, col_clave, es_fila=lambda v: v is not None):
+    """Números de fila de una tabla que empieza en `fila_ini`, sin tope fijo.
+
+    Recorre hacia abajo mientras la celda de `col_clave` cumpla `es_fila` y se
+    detiene en la primera que no (fin de la tabla). Así, cuando el Excel agrega
+    semanas, días o meses nuevos, el tablero los lee sin tocar el código.
+    """
+    filas = []
+    for r in range(fila_ini, ws.max_row + 1):
+        if not es_fila(ws[f"{col_clave}{r}"].value):
+            break
+        filas.append(r)
+    return filas
+
+
+def faltantes(*rutas):
+    """Nombres de los archivos de `rutas` que todavía no se han cargado en data_raw/."""
+    return [os.path.basename(r) for r in rutas if not os.path.exists(r)]
+
+
+MESES_ABR = formatos.MESES_ABR
+
+
+def _indice(headers, nombre, por_defecto=None):
+    """Posición de una columna por su encabezado (tolerante a espacios sobrantes)."""
+    limpios = [h.strip() if isinstance(h, str) else h for h in headers]
+    return limpios.index(nombre) if nombre in limpios else por_defecto
 
 
 @st.cache_data(ttl=600)
-def leer_inventario():
-    wb = openpyxl.load_workbook(F_INVENTARIO, data_only=True)
+def leer_inventario(ruta=None):
+    wb = openpyxl.load_workbook(ruta or F_INVENTARIO, data_only=True)
     ws = wb["Dashboard"]
 
     def g(coord):
         v = ws[coord].value
         return v if v is not None else 0
 
-    actualizado_txt = ws["K2"].value or ""
-    actualizado_fecha = None
-    try:
-        parte = actualizado_txt.split(":")[-1].strip()
-        actualizado_fecha = datetime.datetime.strptime(parte, "%d/%m/%Y").date()
-    except Exception:
-        actualizado_fecha = None
+    # K2: "Actualizado: 09/10/2026" (texto) o una fecha de Excel
+    k2 = ws["K2"].value
+    actualizado_fecha = formatos.parse_actualizado(k2)
+    actualizado_txt = k2 if isinstance(k2, str) else (f"Actualizado: {actualizado_fecha:%d/%m/%Y}" if actualizado_fecha else "")
 
     hoy = {
         "actualizado": actualizado_txt,
@@ -91,11 +114,12 @@ def leer_inventario():
         "facturacion_acum_anio": g("B23"), "motos_facturadas_anio": g("D23"),
         "ci_recaudadas_anio": g("F23"),
     }
-    # resumen mensual: filas 27-34 (mar a sep), columnas N/O (fact), Q/R (ci), T/U/V/W (vend/act/fact)
+    # resumen mensual: desde la fila 27 hacia abajo, un mes por fila (sin tope: crece con el año).
+    # columnas N/O (fact), Q/R (ci), T/U/V/W (vend/act/fact). Se omite una eventual fila de TOTAL.
     meses = []
-    for r in range(27, 35):
+    for r in _filas_tabla(ws, 27, "N"):
         mes_lbl = ws[f"N{r}"].value
-        if not mes_lbl:
+        if str(mes_lbl).strip().lower().startswith("total"):
             continue
         fact = ws[f"O{r}"].value
         ci = ws[f"R{r}"].value
@@ -115,12 +139,13 @@ def leer_inventario():
     # inventario motos: conteo por estado/ubicacion
     ws2 = wb["Inventario motos"]
     header = [c.value for c in ws2[1]]
-    idx_estado = header.index("Estado")
-    idx_ubic = header.index("Ubicación")
+    idx_placa = _indice(header, "Placa", 0)
+    idx_estado = _indice(header, "Estado")
+    idx_ubic = _indice(header, "Ubicación")
     disponibles = 0
     en_site = 0
     for row in ws2.iter_rows(min_row=2, values_only=True):
-        if row[0] is None:
+        if row[idx_placa] is None:
             continue
         if row[idx_estado] == "Disponible":
             disponibles += 1
@@ -149,8 +174,8 @@ def leer_inventario():
 
 
 @st.cache_data(ttl=600)
-def leer_recaudo():
-    wb = openpyxl.load_workbook(F_RECAUDO, data_only=True)
+def leer_recaudo(ruta=None):
+    wb = openpyxl.load_workbook(ruta or F_RECAUDO, data_only=True)
     wsD = wb["Dashboard"]
 
     def g(coord):
@@ -163,25 +188,22 @@ def leer_recaudo():
         pct_cumplimiento=g("F8"), mora_vencida_activos=g("B11"),
         creditos_activos_mora=g("D11"), provision_estimada=g("F11"),
     )
-    # serie diaria de recaudo (P10:S..)
+    # serie diaria de recaudo (P10:S..), sin tope fijo: cubre meses de 31 días
     diario = []
-    for r in range(10, 40):
+    for r in _filas_tabla(wsD, 10, "P"):
         fecha = wsD[f"P{r}"].value
         ingreso = wsD[f"Q{r}"].value
         acumulado = wsD[f"R{r}"].value
-        if fecha is None:
-            continue
         diario.append(dict(fecha=fecha, ingreso_dia=ingreso if isinstance(ingreso, (int, float)) else None,
                             acumulado_mes=acumulado if isinstance(acumulado, (int, float)) else None))
     df_diario = pd.DataFrame(diario)
 
-    # tablero semanal (fila 10 = encabezados, filas 11-15 = Sem 36-40)
+    # tablero semanal (fila 10 = encabezados, datos desde la fila 11). Se leen todas
+    # las filas "Sem NN" seguidas, sin importar cuántas semanas tenga el archivo.
     wsS = wb["Resumen Semanal"]
     semanas = []
-    for r in range(11, 16):
+    for r in _filas_tabla(wsS, 11, "A", es_fila=lambda v: str(v or "").strip().startswith("Sem")):
         sem = wsS.cell(row=r, column=1).value
-        if not sem or not str(sem).startswith("Sem"):
-            continue
         rango = wsS.cell(row=r, column=2).value
         cuotas = wsS.cell(row=r, column=3).value
         meta = wsS.cell(row=r, column=4).value
@@ -197,10 +219,11 @@ def leer_recaudo():
     # detalle de cuotas (fuente mas granular: pagos y vencidas por dia)
     # fila 1 = titulo de la hoja, fila 2 = encabezados reales, datos desde fila 3
     wsC = wb["Detalle Cuotas"]
-    headers = [c.value for c in wsC[2]]
+    headers = [h.strip() if isinstance(h, str) else h for h in (c.value for c in wsC[2])]
+    idx_codigo = _indice(headers, "Cód. crédito", 4)  # por nombre: no depende del orden de columnas
     rows = []
     for row in wsC.iter_rows(min_row=3, values_only=True):
-        if row[4] is None:  # Cód. crédito
+        if row[idx_codigo] is None:
             continue
         rows.append(row)
     df_cuotas = pd.DataFrame(rows, columns=headers)
@@ -208,36 +231,26 @@ def leer_recaudo():
     return dict(dashboard=dashboard, diario=df_diario, semanal=df_semanal, cuotas=df_cuotas)
 
 
-MESES_ABR_INV = {v: k for k, v in MESES_ABR.items()}
-
-
-def _parse_fecha_corte(txt):
-    # ej: "Último registro: 21 sep 2026  ·  AL DÍA" -> date(2026, 9, 21)
-    import re
-    m = re.search(r"(\d{1,2})\s+([a-zA-Zé]{3})\.?\s+(\d{4})", txt or "")
-    if not m:
-        return None
-    dia, mes_abr, anio = m.groups()
-    mes = MESES_ABR_INV.get(mes_abr.lower().replace("é", "e"))
-    if not mes:
-        return None
-    return datetime.date(int(anio), mes, int(dia))
+MESES_ABR_INV = formatos.MESES_ABR_INV
+_parse_fecha_corte = formatos.parse_fecha_corte  # se conserva el nombre por compatibilidad
 
 
 @st.cache_data(ttl=600)
-def leer_tesoreria():
-    wb = openpyxl.load_workbook(F_TESORERIA, data_only=True)
+def leer_tesoreria(ruta=None):
+    wb = openpyxl.load_workbook(ruta or F_TESORERIA, data_only=True)
     ws = wb["Tablero mes"]
 
     def g(coord):
         v = ws[coord].value
         return v if v is not None else 0
 
-    corte_txt = ws["J4"].value or ""
+    j4 = ws["J4"].value
+    corte_txt = j4 if isinstance(j4, str) else (f"{j4:%d/%m/%Y}" if isinstance(j4, datetime.date) else "")
+    mes_control = ws["C4"].value
     dashboard = dict(
-        mes_control=ws["C4"].value,
+        mes_control=mes_control if isinstance(mes_control, datetime.datetime) else None,
         corte_txt=corte_txt,
-        corte_fecha=_parse_fecha_corte(corte_txt),
+        corte_fecha=formatos.parse_fecha_corte(j4),
         presupuesto_mes=g("B8"), ejecutado_mes=g("E8"),
         ingreso_real_mes=g("H8"), pct_cumplimiento_meta=g("K8"),
         caja_disponible_total=g("E14"), resultado_mes=g("B14"),
@@ -290,8 +303,8 @@ def _tabla_desde(ws, col_nombre, header_row=3, data_start=4):
 
 
 @st.cache_data(ttl=600)
-def leer_rrhh():
-    wb = openpyxl.load_workbook(F_RRHH, data_only=True)
+def leer_rrhh(ruta=None):
+    wb = openpyxl.load_workbook(ruta or F_RRHH, data_only=True)
 
     empleados = _tabla_desde(wb["Empleados"], "Nombre completo")
     nomina = _tabla_desde(wb["NominaMensual"], "Empleado")
@@ -318,14 +331,15 @@ def leer_rrhh():
 
 
 @st.cache_data(ttl=600)
-def leer_embudo():
+def leer_embudo(ruta=None):
     """Lee Embudo_Comercial_RODDOS.xlsx (misma estructura que la Plantilla_Embudo_Comercial.xlsx
     descargable). Descarta la fila de ejemplo y cualquier fila sin 'Fecha lead'."""
-    if not os.path.exists(F_EMBUDO):
+    ruta = ruta or F_EMBUDO
+    if not os.path.exists(ruta):
         return pd.DataFrame()
-    wb = openpyxl.load_workbook(F_EMBUDO, data_only=True)
+    wb = openpyxl.load_workbook(ruta, data_only=True)
     ws = wb["Embudo_Diario"]
-    headers = [c.value for c in ws[1]]
+    headers = [h.strip() if isinstance(h, str) else h for h in (c.value for c in ws[1])]
     filas = []
     for row in ws.iter_rows(min_row=2, values_only=True):
         d = dict(zip(headers, row))
@@ -333,38 +347,49 @@ def leer_embudo():
             continue
         if isinstance(d.get("Notas"), str) and "fila de ejemplo" in d["Notas"].lower():
             continue
+        if formatos.fila_embudo_vacia(d):
+            continue  # solo trae la fecha: no es un lead
         filas.append(d)
     df = pd.DataFrame(filas)
     for col in ["Fecha lead", "Fecha formulario", "Fecha decision", "Fecha agenda visita"]:
         if col in df.columns:
-            df[col] = pd.to_datetime(df[col], errors="coerce")
+            # celda por celda y con el día primero: '05/09/2026' es 5 de septiembre
+            df[col] = pd.to_datetime(df[col].map(formatos.parse_fecha_texto), errors="coerce")
     return df
 
 
 @st.cache_data(ttl=600)
-def leer_metas(referencia=None):
+def leer_metas(referencia=None, ruta=None):
     """Lee la fila de Metas_RODDOS.xlsx que corresponde al mes de 'referencia'
     (por defecto, hoy). Si no hay fila para ese mes exacto, usa la más
     reciente que sea <= esa fecha (evita que el tablero se rompa si
-    todavia no se ha diligenciado la fila del mes en curso)."""
-    if not os.path.exists(F_METAS):
+    todavia no se ha diligenciado la fila del mes en curso).
+    Las filas cuyo 'Mes' no es una fecha real se ignoran (el validador ya las rechaza)."""
+    ruta = ruta or F_METAS
+    if not os.path.exists(ruta):
         return None
     ref = referencia or datetime.date.today()
-    wb = openpyxl.load_workbook(F_METAS, data_only=True)
+    if isinstance(ref, datetime.datetime):
+        ref = ref.date()
+    wb = openpyxl.load_workbook(ruta, data_only=True)
     ws = wb["Metas"]
-    headers = [c.value for c in ws[4]]
+    fila_h = formatos.fila_encabezado(ws, "Mes")
+    headers = [h.strip() if isinstance(h, str) else h for h in (c.value for c in ws[fila_h])]
     filas = []
-    for row in ws.iter_rows(min_row=5, values_only=True):
-        if row[0] is None:
-            continue
+    for row in ws.iter_rows(min_row=fila_h + 1, values_only=True):
         d = dict(zip(headers, row))
+        mes = d.get("Mes")
+        if isinstance(mes, datetime.datetime):
+            d["Mes"] = mes.date()
+        elif not isinstance(mes, datetime.date):
+            continue
         filas.append(d)
     if not filas:
         return None
-    candidatas = [f for f in filas if f["Mes"].date() <= ref] or filas
+    candidatas = [f for f in filas if f["Mes"] <= ref] or filas
     fila = max(candidatas, key=lambda f: f["Mes"])
     return dict(
-        mes=fila["Mes"].date(),
+        mes=fila["Mes"],
         ventas=fila["Meta ventas (unidades)"],
         pct_aprobacion=fila["Meta % aprobación crédito"],
         pct_agendas=fila["Meta % cumplimiento agendas"],
@@ -375,13 +400,15 @@ def leer_metas(referencia=None):
 
 
 @st.cache_data(ttl=600)
-def leer_cobranza_semanal():
+def leer_cobranza_semanal(ruta=None):
     """Lee Cobranza_Semanal.xlsx (seguimiento semanal de cobranza).
     Toma los totales de la hoja 'Dashboard'; si una celda no está recalculada
-    (None), la calcula desde las hojas de detalle para no quedar en blanco."""
-    if not os.path.exists(F_COBRANZA):
+    (None), la calcula desde las hojas de detalle para no quedar en blanco.
+    'Pagada' acepta casilla de verificación o texto ('Sí', 'X'...), como dice el instructivo."""
+    ruta = ruta or F_COBRANZA
+    if not os.path.exists(ruta):
         return None
-    wb = openpyxl.load_workbook(F_COBRANZA, data_only=True)
+    wb = openpyxl.load_workbook(ruta, data_only=True)
     if "Dashboard" not in wb.sheetnames:
         return None
     d = wb["Dashboard"]
@@ -405,17 +432,17 @@ def leer_cobranza_semanal():
         for row in ws.iter_rows(min_row=2, values_only=True):
             if cv is None or row[cv] is None:
                 continue
-            filas.append((row[cv], row[cp] if cp is not None else None))
+            filas.append((row[cv], formatos.es_si(row[cp]) if cp is not None else False))
         return filas
 
     sem = _valores(hoja_sem)
     ven = _valores(hoja_ven)
 
     def _sum(filas):
-        return float(sum(v for v, _ in filas))
+        return float(sum(v for v, _ in filas if isinstance(v, (int, float))))
 
     def _sum_pag(filas):
-        return float(sum(v for v, p in filas if p is True))
+        return float(sum(v for v, p in filas if p and isinstance(v, (int, float))))
 
     potencial_semana = num("B4")
     potencial_vencidas = num("C4")
@@ -432,7 +459,7 @@ def leer_cobranza_semanal():
     total_cuotas = num("G4") if num("G4") is not None else (n_cuotas_semana + n_vencidas)
     cuotas_cobradas = num("H4")
     if cuotas_cobradas is None:
-        cuotas_cobradas = sum(1 for _, p in (sem + ven) if p is True)
+        cuotas_cobradas = sum(1 for _, p in (sem + ven) if p)
     cobrado_dinero = num("J4")
     if cobrado_dinero is None:
         cobrado_dinero = _sum_pag(sem) + _sum_pag(ven)
@@ -482,8 +509,12 @@ def leer_cobranza_semanal():
 
 
 @st.cache_data(ttl=600)
-def leer_conciliacion():
-    wb = openpyxl.load_workbook(F_CONCILIACION, data_only=True)
+def leer_conciliacion(ruta=None):
+    # opcional: sin archivo, el panel de conciliación simplemente no se muestra
+    ruta = ruta or F_CONCILIACION
+    if not os.path.exists(ruta):
+        return dict(problemas=[], n_pagos_sin_registrar=0, monto_en_riesgo=0)
+    wb = openpyxl.load_workbook(ruta, data_only=True)
     ws = wb["Problemas y solución"]
     problemas = []
     for row in ws.iter_rows(min_row=2, values_only=True):

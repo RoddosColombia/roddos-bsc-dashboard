@@ -1,6 +1,8 @@
 import streamlit as st
 import plotly.graph_objects as go
-from utils import cop, estilo_roddos, encabezado, kpi
+import os
+
+from utils import cop, estilo_roddos, encabezado, kpi, pedir_archivos, cargar_o_detener
 import acceso
 import data_sources as ds
 
@@ -9,9 +11,13 @@ estilo_roddos()
 acceso.exigir_director()
 encabezado("RRHH · Nómina y equipo")
 
+_faltan = ds.faltantes(ds.F_RRHH)
+if _faltan:
+    pedir_archivos(_faltan)
+
 st.caption("Calculado desde la última carga de Control_RRHH_Nomina_RODDOS_2026.xlsx. La nómina se liquida una vez al mes, no a diario, por eso no sigue el esquema ayer/semana/mes.")
 
-rrhh = ds.leer_rrhh()
+rrhh = cargar_o_detener(ds.leer_rrhh, os.path.basename(ds.F_RRHH))
 
 if rrhh["nomina"].empty or "Empleado" not in rrhh["nomina"].columns:
     st.warning(

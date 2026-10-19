@@ -1,0 +1,4 @@
+# Dependencias solo para desarrollo y tests (no se instalan en el servidor).
+-r requirements.txt
+pytest==9.1.1
+mongomock==4.3.0
