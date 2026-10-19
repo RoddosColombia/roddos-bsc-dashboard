@@ -1,6 +1,10 @@
-# Progreso del desarrollo — rama `mejoras/arranque-local`
+# Progreso del desarrollo del Dashboard BSC
 
 Documento vivo: se actualiza con cada entrega. Si retomas el trabajo, empieza aquí.
+
+**Estado actual (19 oct 2026): versión nueva PUBLICADA** en `roddos-bsc.streamlit.app` (merge de
+`mejoras/arranque-local` a `main`), con los 8 Excel reales cargados por "Actualizar datos".
+Para la próxima mejora: `git switch main`, `git pull` y crear una rama nueva.
 
 Última actualización: 19 de octubre de 2026.
 
@@ -15,13 +19,14 @@ Documento vivo: se actualiza con cada entrega. Si retomas el trabajo, empieza aq
 | 1 | Errores reales: validadores, proyección, Metas, secciones aisladas | ✅ Hecho |
 | 2 | Tests confiables: Excel de prueba, CI, versiones fijas | ✅ Hecho |
 | — | Verificar los validadores contra los Excel REALES (`scripts/verificar_archivos.py`) | ✅ Hecho: los 8 archivos reales pasan (19 oct) |
-| — | Revisar el tablero con los datos reales en local (números con sentido para el negocio) | ⏳ Siguiente |
+| — | Revisar el tablero con los datos reales en local | ✅ Hecho |
 | 3a | Aviso de datos desactualizados (página principal, Vista de reunión, Tesorería) | ✅ Hecho |
 | 3b | Respaldo GridFS en Mongo, reconstruir histórico hacia atrás | ⏳ Pendiente |
 | — | Conectar SharePoint (lectura automática de los Excel) | ⏳ Esperando autorización de Andrés |
 | 4 | Calidad de código: refactor de `app.py`, formatos únicos, leer por etiquetas | ⏳ Pendiente |
-| 5 | Publicar la rama como app de pruebas en Streamlit Cloud, PR y merge | ⏳ Pendiente |
-| — | Actualizar el instructivo (menú, página Histórico, 7 vs 8 archivos) | ⏳ Después del merge |
+| 5 | Publicar: PR, merge a `main` y carga de los 8 Excel reales en producción | ✅ Hecho (19 oct). Sin app de pruebas: el tablero aún no estaba en uso |
+| — | Actualizar el instructivo (menú, página Histórico, aviso de datos, 7 vs 8 archivos) | ⏳ Siguiente |
+| — | Retomar la rutina diaria de actualización (los datos reales son de finales de septiembre) | ⏳ Depende del equipo |
 | — | Agenda: días clicables en la vista Mes | ✅ Hecho |
 | — | Modo oscuro (temas claro/oscuro nativos + colores adaptables, ~94 colores fijos) | 🅿️ Mejora para después |
 | — | Agenda: botón "Hoy" en las vistas Semana y Mes | ✅ Hecho |
@@ -143,3 +148,7 @@ GitHub Actions corre los tests en cada push y en cada Pull Request (`.github/wor
     en la página principal y en la Vista de reunión (Recaudo e Inventario) y en Tesorería.
     Motivo: con los Excel reales se vio que los datos eran de finales de septiembre y el tablero
     lo mostraba como si fuera lo actual. 14 tests nuevos (154 en total).
+14. PUBLICACIÓN (19 oct): PR revisado con las pruebas en verde (3.12 y 3.14), `[historico]
+    destino = "mongo"` agregado a los Secrets de producción, merge a `main` y redespliegue
+    automático. Se subieron los 8 Excel reales en "Actualizar datos" (antes Embudo y Metas nunca
+    se habían podido cargar). Para deshacer: botón "Revert" en el PR de GitHub.
