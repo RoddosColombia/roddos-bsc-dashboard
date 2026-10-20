@@ -1,15 +1,16 @@
-import datetime
 import calendar
 import os
 import streamlit as st
 import plotly.graph_objects as go
 
 from utils import (cop, estilo_roddos, encabezado, pedir_archivos, cargar_o_detener, leer_seguro, mostrar_avisos,
-                   mostrar_frescura)
+                   mostrar_frescura, sincronizar_sharepoint)
 import metricas as mx
 import objetivos as obj
 import data_sources as ds
+import frescura
 import historico
+import reconstruir
 
 st.set_page_config(page_title="RODDOS — Operación diaria", layout="wide", page_icon="🏍️")
 estilo_roddos()
@@ -37,6 +38,7 @@ COLOR_NEUTRO = "#5B616E"
 CARD = "background:#FFFFFF;border:1px solid #E6E8EC;border-radius:16px;padding:16px 18px;"
 
 encabezado("Operación diaria · ayer, esta semana y este mes")
+sincronizar_sharepoint()
 
 _faltan = ds.faltantes(ds.F_RECAUDO, ds.F_INVENTARIO)
 if _faltan:
@@ -52,16 +54,20 @@ hoy_inv_txt = data["hoy_inv_txt"]
 c1, c2, c3 = st.columns(3)
 c1.caption(f"📋 Recaudo — corte {hoy_recaudo}")
 c2.caption(f"📦 Inventario/Ventas — corte {hoy_inv_txt or hoy_inv}")
-c3.caption(f"🎯 Mes de trabajo: {calendar.month_name[hoy_recaudo.month].capitalize()} {hoy_recaudo.year}")
-mostrar_frescura({"Recaudo": hoy_recaudo, "Inventario": data["inv"]["hoy"].get("actualizado_fecha")})
+c3.caption("🎯 Mes de trabajo: " + frescura.texto_mes_de_trabajo(
+    {"Recaudo": hoy_recaudo, "Inventario": hoy_inv, "Embudo": data.get("hoy_emb")}))
+mostrar_frescura({k: v for k, v in {"Recaudo": hoy_recaudo, "Inventario": data["inv"]["hoy"].get("actualizado_fecha"),
+                                     "Embudo": data.get("hoy_emb")}.items() if k != "Embudo" or v})
 mostrar_avisos(data.get("avisos"))
 
 conc = data["conc"]
 if conc["problemas"]:
     with st.expander(f"🔎 Conciliación SISMO ↔ Wava — {len(conc['problemas'])} casos abiertos, {cop(conc['monto_en_riesgo'])} por confirmar", expanded=False):
         for p in conc["problemas"]:
-            st.markdown(f"**{p['num']}. {p['problema']}** — {p['casos']} · {cop(p['monto']) if isinstance(p['monto'], (int, float)) else p['monto']}")
-            st.caption(p["solucion"])
+            # textos del Excel: mdsafe para que dos '$' en una frase no se lean como fórmula
+            monto = cop(p['monto']) if isinstance(p['monto'], (int, float)) else p['monto']
+            st.markdown(mdsafe(f"**{p['num']}. {p['problema']}** — {p['casos']} · {monto}"))
+            st.caption(mdsafe(p["solucion"]))
 
 
 RUBROS_SIN_META = {"cuotas_mes", "vencidas_num", "vencidas_dinero"}
@@ -134,26 +140,34 @@ RUBROS_EMBUDO_TRIADA = ["leads", "formularios", "aprobados_rechazados",
 hay_datos_embudo = M["leads"]["mes"] is not None
 
 # ============ Parámetros de meta ============
-metas = leer_seguro(ds.leer_metas, os.path.basename(ds.F_METAS), hoy_recaudo)
+# Cada indicador se compara con la meta del mes de corte de SU archivo (ver objetivos.py):
+# ventas/activaciones/cuotas iniciales con el mes de Inventario, % aprobación con el del Embudo.
 meta_pactada_recaudo = data["rec"]["dashboard"].get("meta_pactada")
-objetivos_mes = {}
-if metas:
-    objetivos_mes["ventas"] = metas["ventas"]
-    objetivos_mes["activaciones"] = metas["ventas"]
-    objetivos_mes["ci_dinero"] = metas["ci_dinero"]
-    objetivos_mes["pct_aprobacion"] = metas["pct_aprobacion"]
-if meta_pactada_recaudo:
-    objetivos_mes["pagos_dinero"] = meta_pactada_recaudo
+_metas = leer_seguro(obj.objetivos_del_mes, os.path.basename(ds.F_METAS), ds.leer_metas,
+                     {"recaudo": hoy_recaudo, "inventario": hoy_inv,
+                      "embudo": obj.fecha_de_texto(M["leads"].get("corte"))},
+                     meta_pactada_recaudo)
+objetivos_mes, metas_por_fuente = _metas or (
+    {"pagos_dinero": meta_pactada_recaudo} if meta_pactada_recaudo else {}, {})
+metas = metas_por_fuente.get("inventario") or metas_por_fuente.get("recaudo")
 dias_mes = calendar.monthrange(hoy_recaudo.year, hoy_recaudo.month)[1]
 dia_por_rubro = {c: obj.fecha_corte_rubro(c, hoy_recaudo, hoy_inv).day for c in mx.RUBROS_ORDEN}
+dias_mes_rubro = {c: obj.dias_del_mes_rubro(c, hoy_recaudo, hoy_inv) for c in mx.RUBROS_ORDEN}
 
 # ============ Foto del mes para el histórico ============
 # Una vez por sesión y por fecha de corte (no en cada clic) — ver historico.py
-_clave_foto = f"foto_historico_{hoy_recaudo}_{hoy_inv}"
+hoy_emb = data.get("hoy_emb")
+_clave_foto = f"foto_historico_{hoy_recaudo}_{hoy_inv}_{hoy_emb}"
 if not st.session_state.get(_clave_foto):
     try:
-        historico.registrar(historico.almacen(),
-                            historico.armar_foto(M, hoy_recaudo, hoy_inv, objetivos_mes))
+        _alm = historico.almacen()
+        # cada indicador va a la foto del mes de SU archivo (ver historico.registrar_en_vivo)
+        historico.registrar_en_vivo(_alm, M, {"recaudo": hoy_recaudo, "inventario": hoy_inv, "embudo": hoy_emb},
+                                    objetivos_mes)
+        # meses anteriores que se pueden reconstruir desde la historia de los Excel (ver reconstruir.py)
+        _embudo = ds.leer_embudo() if not ds.faltantes(ds.F_EMBUDO) else None
+        historico.registrar_reconstruidas(_alm, reconstruir.reconstruir(
+            data["rec"], data["inv"], _embudo, ds.leer_metas, hoy_recaudo, hoy_inv, hoy_emb=hoy_emb))
         st.session_state[_clave_foto] = True
     except Exception as e:  # el histórico nunca debe tumbar el tablero
         st.caption(f"⚠️ No se pudo guardar la foto del histórico: {e}")
@@ -171,11 +185,12 @@ def meta_periodo(clave, objetivo):
         return None
     if clave not in obj.RUBROS_FLUJO_MENSUAL:
         return objetivo
+    dm = dias_mes_rubro.get(clave, dias_mes)
     if periodo == "mes":
-        return objetivo * dia_por_rubro.get(clave, dias_mes) / dias_mes
+        return objetivo * dia_por_rubro.get(clave, dm) / dm
     if periodo == "semana":
-        return objetivo * 7 / dias_mes
-    return objetivo / dias_mes
+        return objetivo * 7 / dm
+    return objetivo / dm
 
 
 def fmt_val(clave, v):
@@ -362,7 +377,7 @@ with st.expander(f"📊 Ver todo el detalle · {periodo_txt}"):
         for clave, col in zip(todos[i:i + n_col], cols):
             if periodo == "mes":
                 tile_rubro(clave, col, "mes", objetivo=objetivos_mes.get(clave),
-                           dia_del_mes=dia_por_rubro, dias_mes=dias_mes)
+                           dia_del_mes=dia_por_rubro, dias_mes=dias_mes_rubro.get(clave, dias_mes))
             else:
                 tile_rubro(clave, col, periodo)
 
@@ -401,7 +416,12 @@ with st.expander("🎯 Metas del mes"):
     if not metas:
         st.warning("No se ha cargado `Metas_RODDOS.xlsx` todavía — sube uno en **📤 Actualizar datos**.")
     else:
-        st.caption(f"Metas vigentes desde {metas['mes'].strftime('%B %Y').capitalize()} — para cambiarlas, agrega una fila nueva en Metas_RODDOS.xlsx y súbelo en 📤 Actualizar datos.")
+        st.caption(f"Metas vigentes desde {frescura.mes_y_anio(metas['mes'])} — para cambiarlas, agrega una fila nueva en Metas_RODDOS.xlsx y súbelo en 📤 Actualizar datos.")
+        _m_rec = metas_por_fuente.get("recaudo")
+        if _m_rec and _m_rec["mes"] != metas["mes"]:
+            st.caption(f"ℹ️ Recaudo e Inventario están en meses distintos: ventas, activaciones y cuotas "
+                       f"iniciales se comparan con las metas de {frescura.mes_y_anio(metas['mes'])} "
+                       f"(fecha de Inventario); la meta de recaudo sale del propio archivo de Recaudo.")
         mc1, mc2, mc3, mc4 = st.columns(4)
         mc1.metric("Meta ventas", f"{metas['ventas']:,.0f}".replace(",", "."))
         mc2.metric("Meta % aprobación", f"{metas['pct_aprobacion']*100:.0f}%")

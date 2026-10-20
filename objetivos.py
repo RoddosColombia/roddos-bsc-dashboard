@@ -51,3 +51,63 @@ def proyeccion_rubro(clave, valor_a_hoy, objetivo, hoy_recaudo, hoy_inv):
     corte = fecha_corte_rubro(clave, hoy_recaudo, hoy_inv)
     dias_del_mes = calendar.monthrange(corte.year, corte.month)[1]
     return proyeccion_cierre(valor_a_hoy, corte.day, dias_del_mes, objetivo)
+
+
+def dias_del_mes_rubro(clave, hoy_recaudo, hoy_inv):
+    """Días del mes de la fuente del rubro (para prorratear su meta)."""
+    corte = fecha_corte_rubro(clave, hoy_recaudo, hoy_inv)
+    return calendar.monthrange(corte.year, corte.month)[1]
+
+
+# De qué archivo sale cada indicador con meta, y qué columna de Metas_RODDOS.xlsx le corresponde.
+# La meta se toma del MES DE CORTE DE ESE ARCHIVO: si Inventario ya está en octubre y Recaudo
+# sigue en septiembre, las ventas se comparan con la meta de octubre, no con la de septiembre.
+FUENTE_DE_META = {
+    "ventas": ("inventario", "ventas"),
+    "activaciones": ("inventario", "ventas"),
+    "ci_dinero": ("inventario", "ci_dinero"),
+    "pct_aprobacion": ("embudo", "pct_aprobacion"),
+}
+
+
+def objetivos_del_mes(leer_metas, cortes, meta_pactada_recaudo=None):
+    """Arma las metas de cada indicador según el mes de corte de su archivo.
+
+    leer_metas: función fecha -> fila de metas (dict) o None (data_sources.leer_metas).
+    cortes: {"recaudo": date, "inventario": date, "embudo": date o None}.
+    meta_pactada_recaudo: la meta de recaudo que trae el propio archivo de Recaudo.
+
+    Devuelve (objetivos {clave: valor}, metas_por_fuente {fuente: fila de metas o None}).
+    Si una fuente no tiene fecha, usa las metas del mes de Recaudo.
+    """
+    por_mes = {}
+
+    def metas_de(fecha):
+        if fecha is None:
+            return None
+        k = (fecha.year, fecha.month)
+        if k not in por_mes:
+            por_mes[k] = leer_metas(fecha)
+        return por_mes[k]
+
+    metas_por_fuente = {fuente: metas_de(fecha) for fuente, fecha in cortes.items()}
+    objetivos = {}
+    for clave, (fuente, campo) in FUENTE_DE_META.items():
+        fila = metas_por_fuente.get(fuente) or metas_por_fuente.get("recaudo")
+        if fila and fila.get(campo) is not None:
+            objetivos[clave] = fila[campo]
+    if meta_pactada_recaudo:
+        objetivos["pagos_dinero"] = meta_pactada_recaudo
+    return objetivos, metas_por_fuente
+
+
+def fecha_de_texto(v):
+    """'2026-10-12' (como guarda metricas el corte) -> date; None si no aplica."""
+    import datetime
+
+    if isinstance(v, datetime.date):
+        return v
+    try:
+        return datetime.date.fromisoformat(str(v)) if v else None
+    except ValueError:
+        return None

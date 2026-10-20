@@ -7,6 +7,8 @@ import datetime
 import os
 
 import pandas as pd
+
+import formatos
 import data_sources as ds
 
 ETAPAS = [
@@ -70,6 +72,25 @@ def _semana_iso(fecha):
     return fecha.isocalendar()[1]
 
 
+def fecha_corte_embudo(embudo, hoy=None):
+    """Fecha de corte del Embudo: el día más reciente con un lead, formulario o decisión registrados
+    (sin pasar de hoy). Antes se usaba la fecha de Recaudo: si Recaudo estaba atrasado, el "ayer"
+    del embudo buscaba leads de semanas atrás y salía en cero."""
+    hoy = hoy or formatos.hoy_colombia()
+    fechas = []
+    for col in ("Fecha lead", "Fecha formulario", "Fecha decision"):
+        if col in embudo.columns:
+            s = pd.to_datetime(embudo[col], errors="coerce").dropna()
+            s = s[s.dt.date <= hoy]
+            if not s.empty:
+                fechas.append(s.max().date())
+    return max(fechas) if fechas else None
+
+
+def _o_guion(v):
+    return "—" if v is None else v
+
+
 def _aviso(archivo, error):
     return (f"No se pudo leer **{archivo}** ({type(error).__name__}: {error}). "
             "Esa sección queda sin datos; el resto del tablero funciona normal. "
@@ -81,6 +102,7 @@ def construir_metricas():
     decide qué mostrar. Conciliación y Embudo son opcionales: si fallan, se registra
     un aviso en `avisos` y sus rubros quedan "sin dato", sin tumbar el resto."""
     avisos = []
+    hoy_emb = None
     inv = ds.leer_inventario()
     rec = ds.leer_recaudo()
     try:
@@ -96,7 +118,7 @@ def construir_metricas():
     hoy_recaudo = cuotas["Fecha pago SISMO"].max()
     if pd.isna(hoy_recaudo):
         hoy_recaudo = cuotas["Fecha prog."].max()
-    hoy_recaudo = hoy_recaudo.date() if not pd.isna(hoy_recaudo) else datetime.date.today()
+    hoy_recaudo = hoy_recaudo.date() if not pd.isna(hoy_recaudo) else formatos.hoy_colombia()
     ayer_recaudo = hoy_recaudo - datetime.timedelta(days=1)
     semana_ini = hoy_recaudo - datetime.timedelta(days=hoy_recaudo.weekday())
     mes_ini = hoy_recaudo.replace(day=1)
@@ -148,7 +170,7 @@ def construir_metricas():
     M["ventas"] = dict(ayer=None, semana=None, mes=h["vendidas_mes"],
                         fuente="Inventario_2026.xlsx · Dashboard", corte=str(hoy_inv))
     M["facturacion"] = dict(ayer=None, semana=None, mes=h["motos_facturadas_anio"],
-                             extra=f"Pendientes de facturar: {h['pendientes_factura']}",
+                             extra=f"Pendientes de facturar: {_o_guion(h['pendientes_factura'])}",
                              fuente="Inventario_2026.xlsx · Dashboard", corte=str(hoy_inv))
     M["ci_completas"] = dict(ayer=None, semana=None, mes=h["ci_completa_hoy"],
                               fuente="Inventario_2026.xlsx · Dashboard (Plan separe, snapshot de hoy)", corte=str(hoy_inv))
@@ -160,7 +182,8 @@ def construir_metricas():
                               extra=f"Acumulado {hoy_inv.year}: {sum(m['activadas'] or 0 for m in inv['mensual'].to_dict('records'))} activadas",
                               fuente="Inventario_2026.xlsx · Dashboard", corte=str(hoy_inv))
     M["inventario_disponible"] = dict(ayer=None, semana=None, mes=h["disp_total"],
-                                       extra=f"Raider {h['disp_raider']} · Sport {h['disp_sport']} · Apache {h['disp_apache']}",
+                                       extra=f"Raider {_o_guion(h['disp_raider'])} · Sport {_o_guion(h['disp_sport'])} · "
+                                             f"Apache {_o_guion(h['disp_apache'])}",
                                        fuente="Inventario_2026.xlsx · Dashboard", corte=str(hoy_inv))
     M["inventario_bodega"] = dict(ayer=None, semana=None, mes=inv["motos_en_site"],
                                    extra=f"De esas, {h['disp_total']} están realmente disponibles para vender (el resto ya está comprometido)",
@@ -185,7 +208,7 @@ def construir_metricas():
                 M[r] = dict(ayer=None, semana=None, mes=None,
                             fuente="Sin dato aún — se activa al llenar Plantilla_Embudo_Comercial.xlsx", corte=None)
         else:
-            hoy_emb = hoy_recaudo
+            hoy_emb = fecha_corte_embudo(embudo) or hoy_recaudo
             ayer_emb = hoy_emb - datetime.timedelta(days=1)
             semana_ini_emb = hoy_emb - datetime.timedelta(days=hoy_emb.weekday())
             mes_ini_emb = hoy_emb.replace(day=1)
@@ -238,7 +261,9 @@ def construir_metricas():
                 fuente=FUENTE_EMBUDO, corte=str(hoy_emb),
             )
             M["agendas_hoy"] = dict(
-                ayer=None, semana=None, mes=_contar("Fecha agenda visita", hoy_emb, hoy_emb),
+                # "para hoy" es el día REAL (quién viene hoy), no la última fecha con datos del embudo
+                ayer=None, semana=None, mes=_contar("Fecha agenda visita", formatos.hoy_colombia(),
+                                                    formatos.hoy_colombia()),
                 extra="Snapshot de hoy (no acumulado del mes)",
                 fuente=FUENTE_EMBUDO, corte=str(hoy_emb),
             )
@@ -287,4 +312,4 @@ def construir_metricas():
                         fuente="No se pudo leer el Embudo comercial — ver aviso arriba", corte=None)
 
     return dict(metricas=M, inv=inv, rec=rec, conc=conc, hoy_recaudo=hoy_recaudo,
-                hoy_inv=hoy_inv, hoy_inv_txt=hoy_inv_txt, avisos=avisos)
+                hoy_inv=hoy_inv, hoy_inv_txt=hoy_inv_txt, hoy_emb=hoy_emb, avisos=avisos)

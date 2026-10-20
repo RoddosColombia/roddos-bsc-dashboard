@@ -6,8 +6,11 @@ import plotly.graph_objects as go
 
 import os
 
+import formatos
+import frescura
+
 from utils import (cop, estilo_roddos, encabezado, html, hsafe, kpi, hero, pedir_archivos, cargar_o_detener,
-                   leer_seguro, mostrar_frescura)
+                   leer_seguro, mostrar_frescura, sincronizar_sharepoint)
 import acceso
 import data_sources as ds
 
@@ -15,6 +18,7 @@ st.set_page_config(page_title="Tesorería — RODDOS BSC", layout="wide", page_i
 estilo_roddos()
 acceso.exigir_director()
 encabezado("Tesorería y flujo de caja")
+sincronizar_sharepoint()
 
 _faltan = ds.faltantes(ds.F_TESORERIA)
 if _faltan:
@@ -31,7 +35,7 @@ ingresos = tes["ingresos"]
 
 _ultimo_egreso = egresos["Fecha"].max() if not egresos.empty else None
 hoy = dash["corte_fecha"] or (_ultimo_egreso.date() if _ultimo_egreso is not None and not pd.isna(_ultimo_egreso)
-                              else datetime.date.today())
+                              else formatos.hoy_colombia())
 mostrar_frescura({"Tesorería": dash["corte_fecha"] or (_ultimo_egreso.date() if _ultimo_egreso is not None
                                                      and not pd.isna(_ultimo_egreso) else None)})
 ayer = hoy - datetime.timedelta(days=1)
@@ -40,7 +44,7 @@ semana_ini = hoy - datetime.timedelta(days=hoy.weekday())
 al_dia = "AL DÍA" in (dash["corte_txt"] or "").upper()
 c1, c2 = st.columns(2)
 c1.caption(f"📅 Corte {hoy} ({'al día' if al_dia else 'ver detalle'})")
-c2.caption(f"🗓️ Mes de control: {dash['mes_control'].strftime('%B %Y').capitalize() if dash['mes_control'] else '—'}")
+c2.caption(f"🗓️ Mes de control: {frescura.mes_y_anio(dash['mes_control']) if dash['mes_control'] else '—'}")
 
 res_mes = dash["resultado_mes"]
 hero("Caja disponible total · todas las cuentas", cop(dash["caja_disponible_total"]),

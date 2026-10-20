@@ -105,3 +105,25 @@ def fila_encabezado(ws, columna, max_fila=10, por_defecto=4):
             if isinstance(c.value, str) and c.value.strip() == columna:
                 return r
     return por_defecto
+
+
+# ---------------------------------------------------------------- hora de Colombia
+# Los servidores (Streamlit Cloud) corren en UTC: desde las 7 p. m. de Colombia, date.today() ya
+# devuelve el día siguiente. Todo el tablero debe usar ESTAS funciones para "hoy" y "ahora".
+# Colombia no tiene horario de verano: UTC-5 fijo (no hace falta la base de zonas horarias).
+ZONA_COLOMBIA = datetime.timezone(datetime.timedelta(hours=-5), "COT")
+
+
+def ahora_colombia():
+    return datetime.datetime.now(ZONA_COLOMBIA)
+
+
+def hoy_colombia():
+    return ahora_colombia().date()
+
+
+def a_hora_colombia(momento):
+    """Un datetime (con zona, o UTC si viene sin zona como los de Mongo) a la hora de Colombia."""
+    if momento.tzinfo is None:
+        momento = momento.replace(tzinfo=datetime.timezone.utc)
+    return momento.astimezone(ZONA_COLOMBIA)

@@ -2,15 +2,17 @@ import calendar
 import datetime
 import streamlit as st
 
-from utils import estilo_roddos, encabezado, html, hsafe, CARD, CIAN, VERDE, ROJO, MUT, TXT, TXT2, BORDE, TRACK
+from utils import estilo_roddos, encabezado, html, hsafe, CARD, CIAN, VERDE, ROJO, MUT, TXT, TXT2, BORDE
 import os
 
 import data_sources as ds
-from utils import leer_seguro
+import formatos
+from utils import leer_seguro, sincronizar_sharepoint
 
 st.set_page_config(page_title="Agenda — RODDOS BSC", layout="wide", page_icon="🗓️")
 estilo_roddos()
 encabezado("Agenda de visitas")
+sincronizar_sharepoint()
 
 DIAS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
 MESES = ["", "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
@@ -80,7 +82,7 @@ if vista == "Semana":
         off -= 1; st.session_state["ag_sem"] = off; st.rerun()
     if c3.button("Siguiente ▶", key="sem_next", use_container_width=True):
         off += 1; st.session_state["ag_sem"] = off; st.rerun()
-    ref = datetime.date.today() + datetime.timedelta(weeks=off)
+    ref = formatos.hoy_colombia() + datetime.timedelta(weeks=off)
     lunes = ref - datetime.timedelta(days=ref.weekday())
     dias = [lunes + datetime.timedelta(days=i) for i in range(7)]
     total_sem = sum(len(por_dia.get(d, [])) for d in dias)
@@ -90,7 +92,7 @@ if vista == "Semana":
         f"<div style='text-align:center;color:{TXT2};font-size:12px'>{total_sem} clientes esta semana</div>",
         unsafe_allow_html=True)
 
-    hoy = datetime.date.today()
+    hoy = formatos.hoy_colombia()
     cols = st.columns(7)
     for d, col in zip(dias, cols):
         clientes = por_dia.get(d, [])
@@ -111,12 +113,12 @@ else:  # Mes
     c1, c_hoy, c2, c3 = st.columns([1, 0.6, 2.4, 1])
     if c_hoy.button("Hoy", key="mes_hoy", use_container_width=True, disabled=off == 0,
                     help="Volver al mes actual"):
-        st.session_state["ag_mes"] = 0; st.session_state["ag_dia_sel"] = datetime.date.today(); st.rerun()
+        st.session_state["ag_mes"] = 0; st.session_state["ag_dia_sel"] = formatos.hoy_colombia(); st.rerun()
     if c1.button("◀ Anterior", key="mes_prev", use_container_width=True):
         off -= 1; st.session_state["ag_mes"] = off; st.rerun()
     if c3.button("Siguiente ▶", key="mes_next", use_container_width=True):
         off += 1; st.session_state["ag_mes"] = off; st.rerun()
-    base = datetime.date.today().replace(day=1)
+    base = formatos.hoy_colombia().replace(day=1)
     y, m = base.year, base.month
     m += off
     while m > 12: m -= 12; y += 1
@@ -128,7 +130,7 @@ else:  # Mes
         f"<div style='text-align:center;color:{TXT2};font-size:12px'>{total_mes} clientes este mes</div>",
         unsafe_allow_html=True)
 
-    hoy = datetime.date.today()
+    hoy = formatos.hoy_colombia()
     dias_con = sorted(k for k in por_dia if k.year == y and k.month == m)
 
     # Día seleccionado: se conserva mientras siga en el mes que se está viendo.

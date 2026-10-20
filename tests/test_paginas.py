@@ -63,7 +63,10 @@ def test_pagina_principal_guarda_la_foto_del_historico(datos_prueba):
 
     abrir("app.py")
     fotos = historico.AlmacenLocal().listar()
-    assert [f["periodo"] for f in fotos] == [fx.HOY.strftime("%Y-%m")]
+    assert fotos[-1]["periodo"] == fx.HOY.strftime("%Y-%m")          # la foto en vivo del mes de trabajo
+    assert not historico.es_reconstruida(fotos[-1])
+    assert set(fotos[-1]["datos"]["_cortes"]) == {"recaudo", "inventario", "embudo"}
+    assert all(historico.es_reconstruida(f) for f in fotos[:-1])     # los anteriores, reconstruidos
 
 
 @pytest.mark.parametrize("nombre, dañar", [

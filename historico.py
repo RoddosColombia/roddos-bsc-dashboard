@@ -133,6 +133,12 @@ def almacen():
 
 # ---------------------------------------------------------------- fotos
 
+def _ahora():
+    import formatos
+
+    return formatos.ahora_colombia().replace(tzinfo=None)
+
+
 def _numero(v):
     """Convierte a float apto para JSON (numpy, Decimal, etc.); None si no es un número válido."""
     if v is None or isinstance(v, bool):
@@ -146,7 +152,7 @@ def _numero(v):
 
 def armar_foto(metricas, hoy_recaudo, hoy_inv, objetivos=None, ahora=None):
     """Arma la foto del mes a partir del diccionario M de metricas.construir_metricas()."""
-    ahora = ahora or datetime.datetime.now()
+    ahora = ahora or _ahora()
     datos = {clave: _numero(r.get("mes")) for clave, r in metricas.items()}
     datos["_metas"] = {k: _numero(v) for k, v in (objetivos or {}).items()}
     datos["_corte_inventario"] = str(hoy_inv) if hoy_inv else None
@@ -174,3 +180,133 @@ def registrar(alm, foto):
             return False
     alm.guardar(foto)
     return True
+
+
+# ---------------------------------------------------------------- fotos por fuente (formato actual)
+#
+# Cada indicador se guarda en el mes de SU archivo: si Recaudo está en septiembre e Inventario en
+# octubre, el recaudo va a la foto de septiembre y las ventas a la de octubre. Dentro de cada foto:
+#   datos["_cortes"]        {fuente: fecha de corte} de las fuentes tomadas EN VIVO en ese mes
+#   datos["_reconstruidas"] claves que vienen de reconstruir.py (se reemplazan si llega el dato en vivo)
+#   datos["_metas"]         meta de cada indicador ese mes
+
+FUENTES = ("recaudo", "inventario", "embudo")
+CLAVES_INVENTARIO = {"ventas", "facturacion", "ci_completas", "ci_parciales", "ci_dinero", "activaciones",
+                     "dias_inventario", "inventario_bodega", "inventario_disponible"}
+CLAVES_EMBUDO = {"leads", "formularios", "aprobados_rechazados", "pct_aprobacion", "agendas_totales",
+                 "agendas_hoy", "agendas_cumplidas_ayer", "agendas_incumplidas", "agendas_compraron",
+                 "pct_conversion_agenda"}
+
+
+def fuente_de(clave):
+    if clave in CLAVES_INVENTARIO:
+        return "inventario"
+    if clave in CLAVES_EMBUDO:
+        return "embudo"
+    return "recaudo"
+
+
+def _normalizada(foto):
+    """Lleva una foto del formato anterior (una sola fecha para todo) al formato por fuente."""
+    datos = json.loads(json.dumps(foto.get("datos") or {}))
+    if "_cortes" not in datos:
+        if datos.pop("_reconstruida", False):
+            datos["_cortes"] = {}
+            datos["_reconstruidas"] = [k for k in datos if not k.startswith("_")]
+        else:
+            # Foto en vivo del formato anterior: Recaudo y Embudo se tomaron con la fecha de la foto.
+            # El Inventario pudo venir de OTRO mes (se anotaba en "_corte_inventario"): si no coincide
+            # con el mes de la foto, esas cifras no son de este mes y se descartan, para que la
+            # reconstrucción ponga las correctas del resumen mensual.
+            datos["_cortes"] = {"recaudo": foto.get("corte"), "embudo": foto.get("corte")}
+            corte_inv = datos.get("_corte_inventario")
+            if corte_inv and str(corte_inv)[:7] == foto.get("periodo"):
+                datos["_cortes"]["inventario"] = corte_inv
+            elif corte_inv:
+                for k in list(datos):
+                    if fuente_de(k) == "inventario":
+                        datos.pop(k)
+                for k in list(datos.get("_metas") or {}):
+                    if fuente_de(k) == "inventario":
+                        datos["_metas"].pop(k)
+            else:
+                datos["_cortes"]["inventario"] = foto.get("corte")
+            datos["_reconstruidas"] = []
+        datos.pop("_corte_inventario", None)
+    datos.setdefault("_metas", {})
+    datos.setdefault("_reconstruidas", [])
+    return dict(foto, datos=datos)
+
+
+def es_reconstruida(foto):
+    """True si algún indicador del mes viene de la reconstrucción (se marca con * en pantalla)."""
+    return bool(_normalizada(foto)["datos"].get("_reconstruidas"))
+
+
+def _vacia(periodo, corte, ahora):
+    return dict(periodo=periodo, corte=corte, guardado_en=ahora.isoformat(timespec="seconds"),
+                datos={"_cortes": {}, "_reconstruidas": [], "_metas": {}})
+
+
+def registrar_en_vivo(alm, metricas, cortes, objetivos=None, ahora=None):
+    """Guarda los indicadores de cada fuente en la foto del mes de SU fecha de corte.
+
+    metricas: el dict M de metricas.construir_metricas().
+    cortes: {"recaudo": date, "inventario": date, "embudo": date o None}.
+    Un archivo más viejo que el ya registrado para ese mes no pisa nada. Devuelve cuántas fotos escribió.
+    """
+    ahora = ahora or _ahora()
+    escritas = 0
+    for fuente, corte in cortes.items():
+        if corte is None:
+            continue
+        periodo, corte_txt = corte.strftime("%Y-%m"), str(corte)
+        previa = alm.obtener(periodo)
+        foto = _normalizada(previa) if previa else _vacia(periodo, corte_txt, ahora)
+        d = foto["datos"]
+        if (d["_cortes"].get(fuente) or "") > corte_txt:
+            continue  # ya hay un dato más reciente de esta fuente para ese mes
+        antes = json.dumps(d, sort_keys=True)
+        claves = [k for k in metricas if fuente_de(k) == fuente]
+        for k in claves:
+            d[k] = _numero(metricas[k].get("mes"))
+        for k, v in (objetivos or {}).items():
+            if fuente_de(k) == fuente:
+                d["_metas"][k] = _numero(v)
+        d["_cortes"][fuente] = corte_txt
+        d["_reconstruidas"] = [k for k in d["_reconstruidas"] if k not in claves]
+        if previa and json.dumps(d, sort_keys=True) == antes:
+            continue
+        foto["corte"] = max(c for c in d["_cortes"].values() if c)
+        foto["guardado_en"] = ahora.isoformat(timespec="seconds")
+        alm.guardar(foto)
+        escritas += 1
+    return escritas
+
+
+def registrar_reconstruidas(alm, fotos):
+    """Completa los meses con datos reconstruidos (reconstruir.py) SIN pisar nunca un dato en vivo:
+    en cada mes solo se llenan los indicadores de las fuentes que no tienen foto en vivo.
+    Devuelve cuántas fotos escribió."""
+    escritas = 0
+    for nueva in fotos:
+        previa = alm.obtener(nueva["periodo"])
+        foto = _normalizada(previa) if previa else _vacia(nueva["periodo"], nueva["corte"],
+                                                         _ahora())
+        d = foto["datos"]
+        antes = json.dumps(d, sort_keys=True)
+        en_vivo = set(d["_cortes"])
+        for k, v in nueva["datos"].items():
+            if k.startswith("_") or fuente_de(k) in en_vivo:
+                continue
+            d[k] = v
+            if k not in d["_reconstruidas"]:
+                d["_reconstruidas"].append(k)
+        for k, v in (nueva["datos"].get("_metas") or {}).items():
+            if fuente_de(k) not in en_vivo:
+                d["_metas"][k] = v
+        if previa and json.dumps(d, sort_keys=True) == antes:
+            continue
+        alm.guardar(foto)
+        escritas += 1
+    return escritas

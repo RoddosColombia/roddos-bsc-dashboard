@@ -4,6 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+import formatos
 import historico
 from utils import cop, estilo_roddos, encabezado, kpi, VERDE, ROJO, NEUTRO, CIAN
 
@@ -45,8 +46,14 @@ if not fotos:
             "aquí empezará a aparecer cada mes.")
     st.stop()
 
-mes_actual = datetime.date.today().strftime("%Y-%m")
-etiquetas = [nombre_mes(f["periodo"]) + (" (en curso)" if f["periodo"] == mes_actual else "") for f in fotos]
+mes_actual = formatos.hoy_colombia().strftime("%Y-%m")
+etiquetas = [nombre_mes(f["periodo"]) + (" (en curso)" if f["periodo"] == mes_actual else "")
+             + (" *" if historico.es_reconstruida(f) else "") for f in fotos]
+if any(historico.es_reconstruida(f) for f in fotos):
+    st.caption("\\* Mes reconstruido a partir de la historia de los Excel: incluye recaudo, ventas, activaciones, "
+               "cuotas iniciales, leads y % de aprobación. La cartera vencida, la mora y las motos disponibles no "
+               "se pueden saber hacia atrás y aparecen con «—». Desde que el tablero toma fotos en vivo, cada mes "
+               "queda completo.")
 
 # ---- Último mes vs. el anterior ----
 ultima = fotos[-1]
