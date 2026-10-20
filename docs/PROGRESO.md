@@ -22,13 +22,14 @@ Para la próxima mejora: `git switch main`, `git pull` y crear una rama nueva.
 | — | Revisar el tablero con los datos reales en local | ✅ Hecho |
 | 3a | Aviso de datos desactualizados (página principal, Vista de reunión, Tesorería) | ✅ Hecho |
 | — | Metas según el mes de cada archivo + meses en español | ✅ Hecho |
-| — | Conectar SharePoint (lectura automática de los Excel) | ✅ Aplicación registrada en Entra, permiso concedido, probado en local · ⏳ falta: merge y Secrets de producción |
+| — | Conectar SharePoint (lectura automática de los Excel) | ✅ EN PRODUCCIÓN (20 oct): 8 archivos sincronizando |
 | 3b | Reconstruir el histórico hacia atrás | ✅ Hecho |
 | — | Vista de reunión gráfica (pedido de los jefes) | ✅ Hecho |
 | 3c | Respaldo GridFS en Mongo (solo si un Excel pasa de ~8 MB) | 🅿️ Mejora para después |
 | 4 | Calidad de código: refactor de `app.py`, formatos únicos, leer por etiquetas | ⏳ Pendiente |
 | 5 | Publicar: PR, merge a `main` y carga de los 8 Excel reales en producción | ✅ Hecho (19 oct). Sin app de pruebas: el tablero aún no estaba en uso |
-| — | Actualizar el instructivo (menú, página Histórico, aviso de datos, 7 vs 8 archivos) | ⏳ Siguiente |
+| — | Actualizar el instructivo (SharePoint automático, Histórico, Vista de reunión, aviso de datos) | ⏳ Siguiente |
+| — | Proyección de recaudo de octubre (la genera Cobranza; la última es de septiembre) | ⏳ Depende del equipo |
 | — | Retomar la rutina diaria de actualización (los datos reales son de finales de septiembre) | ⏳ Depende del equipo |
 | — | Agenda: días clicables en la vista Mes | ✅ Hecho |
 | — | Modo oscuro (temas claro/oscuro nativos + colores adaptables, ~94 colores fijos) | 🅿️ Mejora para después |
@@ -229,3 +230,13 @@ GitHub Actions corre los tests en cada push y en cada Pull Request (`.github/wor
     en todo el proceso de tests ANTES de importar el proyecto, y limpia las conexiones en caché.
     Verificado con un secrets.toml con [sharepoint], [mongo] e histórico en Mongo: 242 tests, 0 avisos,
     nada real tocado. Los datos reales nunca se dañaron (las rutas de archivos ya estaban aisladas).
+23. EN PRODUCCIÓN (20 oct): PR #2 unido a main, app reiniciada (Reboot app en Streamlit Cloud para
+    que tomara el código), sección [sharepoint] en los Secrets de producción y primera
+    sincronización con los 8 archivos en ✅. Cambios mostrados a Alexandra.
+
+## Mantenimiento
+- El secreto de la aplicación "Dashboard BSC RODDOS" en Entra vence a los 12 meses de creado
+  (octubre 2027). Antes de esa fecha: Entra → Registros de aplicaciones → Certificados y secretos →
+  nuevo secreto → reemplazar client_secret en los Secrets de Streamlit Cloud. Si vence, el tablero
+  deja de actualizarse y el panel de "Actualizar datos" muestra el error AADSTS7000222.
+- Si Streamlit Cloud no toma un merge a main: share.streamlit.io → ⋮ → Reboot app.
