@@ -22,7 +22,30 @@ AL_DIA, ATRASO, GRAVE, SIN_FECHA = "al_dia", "atraso", "grave", "sin_fecha"
 
 
 def _hoy():
-    return datetime.date.today()
+    import formatos
+
+    return formatos.hoy_colombia()
+
+
+def mes_y_anio(d):
+    """'Septiembre 2026' (los nombres de mes del sistema salen en inglés en el servidor)."""
+    return f"{MESES[d.month].capitalize()} {d.year}"
+
+
+def texto_mes_de_trabajo(cortes):
+    """'Octubre 2026 · Recaudo aún en septiembre'.
+
+    El mes de trabajo es el mes MÁS RECIENTE de los datos. Si un archivo va atrasado se dice al
+    lado, en vez de arrastrar todo el tablero a ese mes (cada indicador usa la fecha de su archivo).
+    cortes: {nombre de la fuente: fecha de corte o None}.
+    """
+    validas = {k: (v.date() if isinstance(v, datetime.datetime) else v) for k, v in cortes.items() if v}
+    if not validas:
+        return "—"
+    ultimo = max(validas.values())
+    atrasadas = [f"{k} aún en {MESES[v.month]}" + (f" {v.year}" if v.year != ultimo.year else "")
+                 for k, v in validas.items() if (v.year, v.month) < (ultimo.year, ultimo.month)]
+    return mes_y_anio(ultimo) + ("".join(f" · {a}" for a in atrasadas))
 
 
 def fecha_larga(d, hoy):

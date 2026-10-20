@@ -1,90 +1,100 @@
-import io
-import os
-import shutil
 import datetime
-import tempfile
-import openpyxl
+import os
+
 import streamlit as st
 
-from pymongo.errors import PyMongoError
-
 import acceso
+import carga
+import formatos
 import data_sources as ds
-import respaldo
-import validators as val
 from utils import estilo_roddos, encabezado
 
 st.set_page_config(page_title="Actualizar datos — RODDOS BSC", layout="wide", page_icon="📤")
 estilo_roddos()
 encabezado("Actualizar datos")
 
-st.caption(
-    "RODDOS BSC vive en Streamlit Community Cloud, que no tiene acceso a OneDrive/SharePoint. "
-    "Por eso cada tablero se alimenta de la última versión que se suba aquí — no hay conexión en vivo. "
-    "Sube el archivo real (el mismo que ya manejas), no una versión reducida; cada carga reemplaza "
-    "por completo los datos anteriores. Antes de reemplazar, se guarda una copia de la versión "
-    "anterior (solo 1, no se acumula historial) por si hay que deshacer una carga equivocada."
-)
+import sharepoint  # noqa: E402
+
+_cfg_sp = sharepoint.config()
+if _cfg_sp is None:
+    st.caption(
+        "Cada tablero se alimenta de la última versión que se suba aquí. "
+        "Sube el archivo real (el mismo que ya manejas), no una versión reducida; cada carga reemplaza "
+        "por completo los datos anteriores. Antes de reemplazar, se guarda una copia de la versión "
+        "anterior (solo 1, no se acumula historial) por si hay que deshacer una carga equivocada."
+    )
+else:
+    _ZONA = datetime.timezone(datetime.timedelta(hours=-5))  # Colombia, sin horario de verano
+
+    def _hora(iso):
+        try:
+            return datetime.datetime.fromisoformat(iso).astimezone(_ZONA).strftime("%d/%m %H:%M")
+        except (TypeError, ValueError):
+            return "—"
+
+    with st.container(border=True):
+        st.subheader("🔄 Conexión con SharePoint")
+        if "_error" in _cfg_sp:
+            st.error(_cfg_sp["_error"])
+        else:
+            st.caption(f"El tablero revisa la carpeta **{_cfg_sp['carpeta']}** cada "
+                       f"{int(float(_cfg_sp.get('intervalo_minutos', 10)))} minutos y carga solo los archivos que "
+                       "cambiaron, con las mismas validaciones de la carga manual. Si un archivo trae errores, se "
+                       "sigue mostrando la última versión buena. La carga manual de abajo queda como plan B.")
+            if st.button("🔄 Actualizar ahora desde SharePoint", key="sp_ahora"):
+                with st.spinner("Revisando SharePoint…"):
+                    _estado = sharepoint.sincronizar_si_toca(forzar=True)
+            else:
+                _estado = sharepoint.sincronizar_si_toca()
+            _estado = _estado or {}
+            if _estado.get("_error"):
+                st.error(f"No se pudo revisar SharePoint: {_estado['_error']}")
+            st.caption(f"Última revisión: {_hora(_estado.get('_revisado_en'))}")
+            for _f in carga.fuentes():
+                _v = _estado.get(_f["nombre"], {})
+                _r = _v.get("resultado")
+                if _r == sharepoint.OK:
+                    _txt = f"✅ Al día · guardado en SharePoint el {_hora(_v.get('modificado'))}"
+                elif _r == sharepoint.RECHAZADO:
+                    _txt = (f"⛔ Con errores (guardado el {_hora(_v.get('modificado'))}) — "
+                            "se sigue mostrando la versión anterior")
+                elif _r == sharepoint.EN_EDICION:
+                    _txt = (f"✏️ Recién guardado ({_hora(_v.get('modificado'))}) — se toma en unos minutos, "
+                            "o usa el botón para tomarlo ya")
+                elif _r == sharepoint.NO_ENCONTRADO:
+                    _txt = "❓ No está en la carpeta de SharePoint"
+                else:
+                    _txt = "— Sin revisar todavía"
+                st.markdown(f"**{_f['nombre']}** · {_txt}")
+                if _r == sharepoint.RECHAZADO and _v.get("errores"):
+                    with st.expander(f"Ver los {len(_v['errores'])} problema(s) de {_v.get('archivo_sharepoint')}"):
+                        for _e in _v["errores"]:
+                            st.caption(f"• {_e}")
 
 if ds.db_respaldo() is None:
     st.warning("Respaldo en la nube: **no configurado**. Lo que subas se pierde si el servidor se reinicia.")
 else:
     st.info("Respaldo en la nube: **activo**. Cada carga queda guardada y se recupera sola tras un reinicio.")
 
-VERSIONES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data_raw", "versiones")
-os.makedirs(VERSIONES_DIR, exist_ok=True)
-
-FUENTES = [
-    dict(nombre="Recaudo", archivo=ds.F_RECAUDO, validador=val.validar_recaudo,
-         cache=ds.leer_recaudo, descripcion="Proyeccion_Recaudo.xlsx — usado en la página principal (rubros 14 a 19)."),
-    dict(nombre="Inventario / Ventas", archivo=ds.F_INVENTARIO, validador=val.validar_inventario,
-         cache=ds.leer_inventario, descripcion="Inventario_2026.xlsx — usado en la página principal (rubros 8 a 13, 20, 21)."),
-    dict(nombre="Conciliación SISMO ↔ Wava", archivo=ds.F_CONCILIACION, validador=val.validar_conciliacion,
-         cache=ds.leer_conciliacion, solo_directores=True, descripcion="Cruce_SISMO_Wava.xlsx — panel de conciliación en la página principal."),
-    dict(nombre="Tesorería", archivo=ds.F_TESORERIA, validador=val.validar_tesoreria,
-         cache=ds.leer_tesoreria, solo_directores=True, descripcion="Flujo_Pagos_Deudas.xlsx — página Tesorería."),
-    dict(nombre="RRHH / Nómina", archivo=ds.F_RRHH, validador=val.validar_rrhh,
-         cache=ds.leer_rrhh, solo_directores=True, descripcion="Control_RRHH_Nomina_RODDOS_2026.xlsx — página RRHH."),
-    dict(nombre="Embudo comercial (Marketing / leads)", archivo=ds.F_EMBUDO, validador=val.validar_embudo,
-         cache=ds.leer_embudo, descripcion="Embudo_Comercial_RODDOS.xlsx — rubros 1 a 7 de la página principal. "
-                                            "Este es el único que empieza vacío: descarga la plantilla en la "
-                                            "página principal si aún no la tienes."),
-    dict(nombre="Metas del mes", archivo=ds.F_METAS, validador=val.validar_metas,
-         cache=ds.leer_metas, solo_directores=True, descripcion="Metas_RODDOS.xlsx — objetivos que fija la dirección cada mes "
-                                           "(ventas, % aprobación, % agendas, tope de mora, gasto fijo). "
-                                           "Agrega una fila nueva cada mes, no borres las anteriores."),
-    dict(nombre="Cobranza semanal", archivo=ds.F_COBRANZA, validador=val.validar_cobranza_semanal,
-         cache=ds.leer_cobranza_semanal, descripcion="Cobranza_Semanal.xlsx — seguimiento de las cuotas a cobrar de la semana "
-                                           "(hojas: Dashboard, Cuotas de la semana, Cuotas vencidas). Marca 'Pagada' a medida "
-                                           "que cobras; alimenta la sección Cobranza de la semana en la página principal."),
-]
-
-
-def probar_lectura(fuente, contenido):
-    """Lee el archivo nuevo con el MISMO lector que usará el tablero, sobre una copia
-    temporal, antes de reemplazar nada. Si el lector falla, el archivo se rechaza y los
-    datos anteriores quedan intactos. Devuelve None si todo bien, o el error."""
-    fd, ruta_tmp = tempfile.mkstemp(suffix=".xlsx", prefix="prueba_")
-    try:
-        with os.fdopen(fd, "wb") as f:
-            f.write(contenido)
-        fuente["cache"](ruta=ruta_tmp)
-        return None
-    except Exception as e:
-        return e
-    finally:
-        fuente["cache"].clear()  # no dejar en caché la lectura de la copia temporal
-        try:
-            os.remove(ruta_tmp)
-        except OSError:
-            pass
+FUENTES = carga.fuentes()
 
 
 def _ultima_actualizacion(path):
+    """Fecha y hora (de Colombia) de la última carga. Con respaldo en Mongo se usa la fecha real de
+    la carga: la del archivo en disco cambia cada vez que el servidor se reinicia y lo restaura."""
     if not os.path.exists(path):
         return "Nunca se ha cargado"
-    ts = datetime.datetime.fromtimestamp(os.path.getmtime(path))
-    return ts.strftime("%d/%m/%Y %H:%M")
+    momento = None
+    db = ds.db_respaldo()
+    if db is not None:
+        try:
+            doc = db.archivos.find_one({"_id": os.path.basename(path)}, {"subido_en": 1})
+            momento = doc.get("subido_en") if doc else None
+        except Exception:
+            momento = None
+    if momento is None:
+        momento = datetime.datetime.fromtimestamp(os.path.getmtime(path), datetime.timezone.utc)
+    return formatos.a_hora_colombia(momento).strftime("%d/%m/%Y %H:%M")
 
 
 es_director = acceso.formulario_director(
@@ -116,38 +126,19 @@ for fuente in FUENTES:
             elif subido is not None:
                 try:
                     subido.seek(0)
-                    contenido = subido.read()
-                    # data_only=True: se validan los VALORES que verá el tablero, no las fórmulas
-                    wb_check = openpyxl.load_workbook(io.BytesIO(contenido), data_only=True)
-                    errores = fuente["validador"](wb_check)
-                    if not errores:
-                        fallo = probar_lectura(fuente, contenido)
-                        if fallo is not None:
-                            errores = [f"El archivo tiene las hojas y columnas esperadas, pero el tablero no "
-                                       f"lo pudo leer ({type(fallo).__name__}: {fallo}). Revisa que no tenga "
-                                       "celdas con error (#¡REF!, #¡VALOR!) ni filas de encabezado movidas."]
-                    if errores:
+                    resultado = carga.procesar(fuente, subido.read())  # mismo camino que SharePoint
+                    if not resultado["ok"]:
+                        errores = resultado["errores"]
                         st.error(f"No se cargó — {len(errores)} problema(s) encontrado(s):")
                         for e in errores[:20]:
                             st.caption(f"• {e}")
                         if len(errores) > 20:
                             st.caption(f"... y {len(errores) - 20} más. Corrige y vuelve a subir.")
                     else:
-                        if os.path.exists(fuente["archivo"]):
-                            ruta_respaldo = os.path.join(VERSIONES_DIR, os.path.basename(fuente["archivo"]) + ".anterior.xlsx")
-                            shutil.copy2(fuente["archivo"], ruta_respaldo)
-                        with open(fuente["archivo"], "wb") as f:
-                            f.write(contenido)
-                        fuente["cache"].clear()
                         st.session_state[clave_hecho] = id_subido
-                        db = ds.db_respaldo()
-                        if db is None:
+                        if resultado["aviso"]:
+                            st.error(resultado["aviso"] + " Vuelve a subirlo en unos minutos.")
+                        else:
                             st.rerun()
-                        try:
-                            respaldo.guardar(db, os.path.basename(fuente["archivo"]), contenido)
-                            st.rerun()
-                        except PyMongoError as e:
-                            st.error(f"Se cargó, pero NO quedó respaldado en la nube: {e}. "
-                                     "Vuelve a subirlo en unos minutos.")
                 except Exception as e:
                     st.error(f"No se pudo leer el archivo: {e}")

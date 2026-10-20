@@ -108,7 +108,7 @@ class _Acumulador:
 
 
 def _revisar_tipos(acc, ws, hoja, fila_header, numericas=(), fechas=(), incluir=None, no_futuras=()):
-    manana = datetime.date.today() + datetime.timedelta(days=1)
+    manana = formatos.hoy_colombia() + datetime.timedelta(days=1)
     for n, d in _filas(ws, fila_header, incluir):
         for col in numericas:
             v = d.get(col)
@@ -186,9 +186,11 @@ def validar_recaudo(wb):
 
 # ---------------------------------------------------------------- Inventario
 
+# Críticas: ventas, activaciones y cuotas iniciales del mes, y motos disponibles. Deben ser números.
+# Las demás celdas del Dashboard pueden traer un error de Excel (#REF!, #N/A) sin bloquear el archivo:
+# el lector las muestra como "—". Caso real (oct 2026): el maestro de Operaciones trae #REF! en H7.
 INVENTARIO_CELDAS_DASHBOARD = ["B7", "D7", "F7", "H18"]
-INVENTARIO_CELDAS_NUMERICAS = ["B7", "D7", "F7", "H7", "J7", "B12", "D12", "F12", "H12", "J12",
-                               "B18", "D18", "F18", "H18", "J18", "B23", "D23", "F23"]
+INVENTARIO_CELDAS_NUMERICAS = INVENTARIO_CELDAS_DASHBOARD
 
 
 def validar_inventario(wb):
@@ -295,7 +297,7 @@ def validar_embudo(wb):
                 "Usa la Plantilla_Embudo_Comercial sin borrar columnas."]
 
     idx = {h: i for i, h in enumerate(headers)}
-    hoy = datetime.date.today()
+    hoy = formatos.hoy_colombia()
     acc = _Acumulador()
 
     for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):

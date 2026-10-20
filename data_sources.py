@@ -94,8 +94,12 @@ def leer_inventario(ruta=None):
     ws = wb["Dashboard"]
 
     def g(coord):
+        # vacía -> 0 (así funcionaba siempre). Un error de Excel (#REF!, #N/A...) o un texto -> None:
+        # el tablero muestra "—" en vez de un número falso. Las celdas críticas las exige el validador.
         v = ws[coord].value
-        return v if v is not None else 0
+        if v is None:
+            return 0
+        return v if isinstance(v, (int, float)) and not isinstance(v, bool) else None
 
     # K2: "Actualizado: 09/10/2026" (texto) o una fecha de Excel
     k2 = ws["K2"].value
@@ -368,7 +372,7 @@ def leer_metas(referencia=None, ruta=None):
     ruta = ruta or F_METAS
     if not os.path.exists(ruta):
         return None
-    ref = referencia or datetime.date.today()
+    ref = referencia or formatos.hoy_colombia()
     if isinstance(ref, datetime.datetime):
         ref = ref.date()
     wb = openpyxl.load_workbook(ruta, data_only=True)

@@ -137,6 +137,24 @@ def cargar_o_detener(lector, archivos, *args, **kwargs):
         st.stop()
 
 
+def sincronizar_sharepoint(mostrar_alertas=True, forzar=False):
+    """Trae de SharePoint los archivos que cambiaron (si la conexión está configurada; si no,
+    no hace nada). Va al inicio de cada página, ANTES de leer los datos. Ver sharepoint.py."""
+    import sharepoint
+
+    if sharepoint.config() is None:
+        return None
+    with st.spinner("Revisando cambios en SharePoint…"):
+        estado = sharepoint.sincronizar_si_toca(forzar=forzar)
+    if mostrar_alertas and estado:
+        for _, archivo, _ in sharepoint.rechazados(estado):
+            st.warning(f"⚠️ El archivo **{archivo}** en SharePoint tiene errores y no se cargó: se muestra la "
+                       "última versión buena. El detalle está en 📤 Actualizar datos.")
+        if estado.get("_error"):
+            st.warning(f"⚠️ No se pudo revisar SharePoint ({estado['_error']}). Se muestran los últimos datos cargados.")
+    return estado
+
+
 def mostrar_frescura(cortes):
     """Aviso de datos desactualizados. `cortes`: {fuente: fecha de corte}. Ver frescura.py."""
     import frescura
@@ -163,8 +181,11 @@ def mostrar_avisos(avisos):
 
 
 def hsafe(s):
-    """'$' como entidad HTML: se ve como $ y no dispara KaTeX dentro de HTML."""
-    return str(s).replace("$", "&#36;")
+    """Texto plano listo para meter en HTML: escapa <, > y & (un nombre como "Cliente A & B" o una
+    nota "saldo < 0" ya no rompen la tarjeta) y pone '$' como entidad para que no dispare KaTeX."""
+    import html as _html
+
+    return _html.escape(str(s), quote=False).replace("$", "&#36;")
 
 
 def kpi(etiqueta, valor, chip_txt=None, chip_color=NEUTRO, sub=None, valor_color=TXT, tam=26):

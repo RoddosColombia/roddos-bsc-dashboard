@@ -64,3 +64,20 @@ def test_pagina_principal_al_dia(datos_prueba, monkeypatch):
     at = _abrir("app.py")
     assert not any("no están al día" in e.value for e in at.error)
     assert any("✅ Datos al día" in c.value for c in at.caption)
+
+
+def test_mes_de_trabajo_es_el_mas_reciente_y_avisa_el_atrasado():
+    f = fr.texto_mes_de_trabajo
+    assert f({"Recaudo": dt.date(2026, 9, 14), "Inventario": dt.date(2026, 10, 20),
+              "Embudo": dt.date(2026, 10, 19)}) == "Octubre 2026 · Recaudo aún en septiembre"
+    assert f({"Recaudo": dt.date(2026, 10, 18), "Inventario": dt.date(2026, 10, 20)}) == "Octubre 2026"
+    assert f({"Recaudo": dt.date(2025, 12, 30), "Inventario": dt.date(2026, 1, 5),
+              "Embudo": None}) == "Enero 2026 · Recaudo aún en diciembre 2025"
+    assert f({"Recaudo": None}) == "—"
+
+
+def test_vista_reunion_muestra_el_mes_mas_reciente(datos_prueba, reemplazar):
+    reemplazar("Proyeccion_Recaudo.xlsx", fx.wb_recaudo(hoy=dt.date(2026, 9, 20)))
+    at = _abrir("pages/3_Vista_Reunion.py")
+    assert not at.exception
+    assert "Mes de trabajo · Octubre 2026 · Recaudo aún en septiembre" in " ".join(m.value for m in at.markdown)

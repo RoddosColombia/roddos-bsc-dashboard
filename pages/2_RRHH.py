@@ -2,7 +2,7 @@ import streamlit as st
 import plotly.graph_objects as go
 import os
 
-from utils import cop, estilo_roddos, encabezado, kpi, pedir_archivos, cargar_o_detener
+from utils import cop, estilo_roddos, encabezado, kpi, pedir_archivos, cargar_o_detener, sincronizar_sharepoint
 import acceso
 import data_sources as ds
 
@@ -10,6 +10,7 @@ st.set_page_config(page_title="RRHH — RODDOS BSC", layout="wide", page_icon="�
 estilo_roddos()
 acceso.exigir_director()
 encabezado("RRHH · Nómina y equipo")
+sincronizar_sharepoint()
 
 _faltan = ds.faltantes(ds.F_RRHH)
 if _faltan:

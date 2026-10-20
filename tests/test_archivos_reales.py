@@ -112,3 +112,29 @@ def test_metas_sin_columnas_dice_que_encabezados_encontro():
     ws.append(["Periodo", "Ventas"])
     errores = val.validar_metas(_como_se_sube(wb))
     assert "Encabezados encontrados" in errores[0] and "Periodo" in errores[0]
+
+
+# ---------------------------------------------------------------- Inventario maestro (Operaciones)
+
+def test_inventario_con_ref_en_celda_secundaria_se_acepta(datos_prueba, reemplazar):
+    """Caso real (20 oct): el maestro 'Inventario 2026.xlsx' de Operaciones trae #REF! en H7
+    (plan separe no activados), una celda que ningún indicador usa."""
+    wb = fx.wb_inventario()
+    wb["Dashboard"]["H7"] = "#REF!"
+    wb["Dashboard"]["D18"] = "#N/A"
+    assert val.validar_inventario(_como_se_sube(wb)) == []
+    reemplazar("Inventario_2026.xlsx", wb)
+    inv = ds.leer_inventario()
+    assert inv["hoy"]["plan_separe_no_activados"] is None and inv["hoy"]["disp_sport"] is None
+    import metricas as mx
+    M = mx.construir_metricas()["metricas"]
+    assert "Sport —" in M["inventario_disponible"]["extra"]          # "—", no "None" ni un 0 falso
+    assert M["ventas"]["mes"] == 12
+
+
+@pytest.mark.parametrize("celda", ["B7", "D7", "F7", "H18"])
+def test_inventario_con_error_en_celda_critica_se_rechaza(celda):
+    wb = fx.wb_inventario()
+    wb["Dashboard"][celda] = "#REF!"
+    errores = val.validar_inventario(_como_se_sube(wb))
+    assert any(celda in e for e in errores)
