@@ -33,15 +33,31 @@ def parse_fecha_corte(txt):
 
 
 def parse_actualizado(v):
-    """Celda K2 del Inventario: 'Actualizado: 09/10/2026' (o una fecha de Excel) -> date."""
+    """Celda K2 del Inventario -> date. Acepta:
+      - 'Actualizado: 09/10/2026' (texto) o una fecha de Excel;
+      - 'Actualizado: 27/10/yyyy': la fórmula =TEXT(TODAY(),"dd/mm/yyyy") guardada desde un Excel
+        en ESPAÑOL, que no entiende 'yyyy' (allá el año es 'aaaa') y lo deja como texto. Caso real
+        (27 oct 2026). Se toma el año actual, o el anterior si esa fecha todavía no ha llegado;
+      - el número de serie de Excel (si la celda tiene un formato de fecha que no se reconoce)."""
     if isinstance(v, datetime.datetime):
         return v.date()
     if isinstance(v, datetime.date):
         return v
-    m = re.search(r"(\d{1,2})/(\d{1,2})/(\d{4})", str(v or ""))
-    if not m:
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        if 20000 < v < 80000:  # número de serie de Excel (entre 1954 y 2119)
+            return datetime.date(1899, 12, 30) + datetime.timedelta(days=int(v))
         return None
-    dia, mes, anio = (int(x) for x in m.groups())
+    txt = str(v or "")
+    m = re.search(r"(\d{1,2})/(\d{1,2})/(\d{4})", txt)
+    if m:
+        dia, mes, anio = (int(x) for x in m.groups())
+    else:
+        m = re.search(r"(\d{1,2})/(\d{1,2})/(?:yyyy|aaaa)\b", txt, re.IGNORECASE)
+        if not m:
+            return None
+        dia, mes = (int(x) for x in m.groups())
+        hoy = hoy_colombia()
+        anio = hoy.year if (mes, dia) <= (hoy.month, hoy.day) else hoy.year - 1
     try:
         return datetime.date(anio, mes, dia)
     except ValueError:

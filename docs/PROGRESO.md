@@ -234,9 +234,19 @@ GitHub Actions corre los tests en cada push y en cada Pull Request (`.github/wor
     que tomara el código), sección [sharepoint] en los Secrets de producción y primera
     sincronización con los 8 archivos en ✅. Cambios mostrados a Alexandra.
 
+24. Inventario movido (27 oct): el maestro "Inventario 2026.xlsx" pasó a "1 Fuentes al día" (la copia
+    vieja ya no existe). Se quitó [sharepoint.archivos] de los Secrets: el tablero lo encuentra en la
+    carpeta normal. Además, la celda K2 (="Actualizado: "&TEXT(TODAY(),"dd/mm/yyyy")) guardada desde
+    un Excel en español queda "27/10/yyyy" (allá el año es "aaaa"); el tablero no sabía la fecha.
+    formatos.parse_actualizado ahora acepta el año literal (yyyy/aaaa) y el número de serie de Excel.
+    Recomendado: cambiar la fórmula por una que no dependa del idioma (ver abajo). 255 tests.
+
 ## Mantenimiento
 - El secreto de la aplicación "Dashboard BSC RODDOS" en Entra vence a los 12 meses de creado
   (octubre 2027). Antes de esa fecha: Entra → Registros de aplicaciones → Certificados y secretos →
   nuevo secreto → reemplazar client_secret en los Secrets de Streamlit Cloud. Si vence, el tablero
   deja de actualizarse y el panel de "Actualizar datos" muestra el error AADSTS7000222.
 - Si Streamlit Cloud no toma un merge a main: share.streamlit.io → ⋮ → Reboot app.
+- Fórmula recomendada para K2 del inventario (funciona en Excel en inglés y en español):
+  ="Actualizado: "&DAY(TODAY())&"/"&MONTH(TODAY())&"/"&YEAR(TODAY())
+  En Excel en español se escribe: ="Actualizado: "&DIA(HOY())&"/"&MES(HOY())&"/"&AÑO(HOY())
