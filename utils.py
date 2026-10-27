@@ -47,11 +47,13 @@ h1, h2, h3, h4, h5, h6 {
       46,8% / 50,8% del símbolo, radio 9,6%) queda justo antes del borde.
    2) ::after  = el logo completo de RODDOS (static/roddos_fondo.png), muy sutil y grande, cruzando la
       pantalla de izquierda a derecha (la "S" se sale por la derecha).
-   Tamaños en vh/vw para que se vea igual en cualquier pantalla. */
+   Tamaños en vh/vw para que se vea igual en cualquier pantalla.
+   Ruta RELATIVA "app/static/..." (sin "/" inicial): Streamlit Cloud sirve la app dentro de un marco en
+   una subruta (/~/+/), y la ruta absoluta "/app/static" no llega a la app; en local funcionan ambas. */
 .stApp { background: #0E1214; }
 .stApp::before {
     content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
-    background: url("/app/static/roddos_anillos.png") no-repeat;
+    background: url("app/static/roddos_anillos.png") no-repeat;
     background-size: 92vh 92vh;
     /* x: borde derecho del círculo pequeño a 1,5vw del borde  ->  98,5vw - 0,096·92vh - 0,468·92vh
        y: centro del símbolo al 40% del alto                   ->  40vh - 0,508·92vh */
@@ -62,7 +64,7 @@ h1, h2, h3, h4, h5, h6 {
     content: ""; position: fixed; pointer-events: none; z-index: 0;
     left: 2vw; width: 112vw; height: 38vw;                 /* 112vw: la "S" queda fuera de la pantalla */
     bottom: calc(11vh - 10.6vw);                          /* la base de las letras al ~89% del alto */
-    background: url("/app/static/roddos_fondo.png") no-repeat left bottom / contain;
+    background: url("app/static/roddos_fondo.png") no-repeat left bottom / contain;
     opacity: 0.55; filter: blur(1.5px);
 }
 [data-testid="stAppViewContainer"] { position: relative; z-index: 1; background: transparent; }
