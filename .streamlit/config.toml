@@ -1,10 +1,14 @@
-# Identidad visual RODDOS — Financing Motion (dark mode).
-# Colores de marca: negro #121212, Cyber Cyan #00E5FF, Growth Green #00C853.
+# Identidad visual RODDOS — oscuro con efecto vidrio (glassmorphism).
+# Colores de marca: negro, cian y verde. Ver utils.py (_ESTILO) para el vidrio y el fondo.
 
 [theme]
-base = "light"
-primaryColor = "#00B8D4"
-backgroundColor = "#F6F7F9"
-secondaryBackgroundColor = "#FFFFFF"
-textColor = "#1A1D23"
+base = "dark"
+primaryColor = "#5BE49B"
+backgroundColor = "#0E1214"
+secondaryBackgroundColor = "#1C2225"
+textColor = "#EEF2F4"
 font = "sans serif"
+
+[server]
+# Sirve la carpeta static/ (logo de fondo) en /app/static/. El navegador la guarda en caché.
+enableStaticServing = true

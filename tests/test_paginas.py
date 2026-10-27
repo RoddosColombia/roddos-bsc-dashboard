@@ -183,7 +183,9 @@ def test_agenda_mes_cambiar_de_mes_no_arrastra_el_dia(datos_prueba):
 def test_agenda_boton_hoy_en_semana(datos_prueba):
     import datetime
 
-    at = AppTest.from_file(os.path.join(RAIZ, "pages/4_Agenda.py"), default_timeout=60).run()
+    at = AppTest.from_file(os.path.join(RAIZ, "pages/4_Agenda.py"), default_timeout=60)
+    at.session_state["ag_vista"] = "Semana"                     # la vista por defecto ahora es Mes
+    at.run()
     assert at.button(key="sem_hoy").disabled                    # ya estás en la semana actual
     at.button(key="sem_prev").click().run()
     at.button(key="sem_prev").click().run()
@@ -206,3 +208,10 @@ def test_agenda_boton_hoy_en_mes(datos_prueba):
     assert at.session_state["ag_mes"] == 0
     assert at.session_state["ag_dia_sel"] == datetime.date.today()   # queda marcado el día de hoy
     assert at.button(key="mes_hoy").disabled
+
+
+def test_agenda_abre_en_la_vista_mes(datos_prueba):
+    at = AppTest.from_file(os.path.join(RAIZ, "pages/4_Agenda.py"), default_timeout=60).run()
+    sin_errores(at)
+    assert any(b.key == "mes_hoy" for b in at.button)          # la navegación del mes
+    assert sum(1 for b in at.button if b.key.startswith("agdia_")) >= 28

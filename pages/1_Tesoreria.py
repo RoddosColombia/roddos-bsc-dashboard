@@ -8,6 +8,7 @@ import os
 
 import formatos
 import frescura
+import graficos
 
 from utils import (cop, estilo_roddos, encabezado, html, hsafe, kpi, hero, pedir_archivos, cargar_o_detener,
                    leer_seguro, mostrar_frescura, sincronizar_sharepoint)
@@ -24,9 +25,9 @@ _faltan = ds.faltantes(ds.F_TESORERIA)
 if _faltan:
     pedir_archivos(_faltan)
 
-COLOR_OK = "#00A344"
-COLOR_ALERTA = "#E08600"
-COLOR_CRIT = "#E5484D"
+COLOR_OK = "#5BE49B"
+COLOR_ALERTA = "#F5B062"
+COLOR_CRIT = "#F87171"
 
 tes = cargar_o_detener(ds.leer_tesoreria, os.path.basename(ds.F_TESORERIA))
 dash = tes["dashboard"]
@@ -88,8 +89,9 @@ if not egr_sem_cat.empty:
         top_cat = egr_sem_cat.groupby("Categoría normalizada")["Valor"].sum().sort_values(ascending=False).head(6)
         fig = go.Figure(go.Bar(x=top_cat.values, y=top_cat.index, orientation="h", marker_color=COLOR_ALERTA))
         fig.update_layout(height=280, margin=dict(l=10, r=10, t=10, b=10),
-                          paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#1A1D23")
-        st.plotly_chart(fig, use_container_width=True)
+                          paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#EEF2F4")
+        graficos.pulir(fig, "dinero")
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 st.subheader("3 · ¿Cómo vamos este mes?")
 mcols = st.columns(4)
@@ -132,15 +134,15 @@ else:
     resultado_objetivo = meta_pactada_recaudo + meta_ci - gasto_fijo - pago_auteco_mes
 
     def linea(signo, etiqueta, valor):
-        return (f"<div style='display:flex;justify-content:space-between;align-items:center;padding:10px 4px;border-top:1px solid #EEF0F3'>"
-                f"<span style='font-size:14px;color:#5B616E'>{signo} {etiqueta}</span>"
-                f"<span style='font-size:16px;font-weight:700;color:#1A1D23;font-family:Montserrat,sans-serif'>{hsafe(cop(valor))}</span></div>")
+        return (f"<div style='display:flex;justify-content:space-between;align-items:center;padding:10px 4px;border-top:1px solid #FFFFFF14'>"
+                f"<span style='font-size:14px;color:#B4BCC5'>{signo} {etiqueta}</span>"
+                f"<span style='font-size:16px;font-weight:700;color:#EEF2F4;font-family:Montserrat,sans-serif'>{hsafe(cop(valor))}</span></div>")
 
     filas = (linea("+", "Recaudo objetivo de cuotas semanales (meta pactada)", meta_pactada_recaudo)
              + linea("+", "Ingreso objetivo por cuotas iniciales (Metas)", meta_ci)
              + linea("−", "Gasto fijo mensual (Metas)", -gasto_fijo)
              + linea("−", "Pago a Auteco del mes (facturas que vencen este mes)", -pago_auteco_mes))
-    html(f"<div style='background:#1A1A1A;border:1px solid #2C2C2C;border-radius:14px;padding:8px 16px'>{filas}</div>")
+    html(f"<div style='background:#1C2225B8;backdrop-filter:blur(14px);border:1px solid #FFFFFF1F;border-radius:14px;padding:8px 16px'>{filas}</div>")
 
     st.write("")
     hero("= Resultado objetivo del mes", cop(resultado_objetivo),

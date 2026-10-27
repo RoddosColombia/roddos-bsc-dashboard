@@ -22,10 +22,10 @@ _faltan = ds.faltantes(ds.F_RECAUDO, ds.F_INVENTARIO)
 if _faltan:
     pedir_archivos(_faltan)
 
-COLOR_OK = "#00A344"
-COLOR_ALERTA = "#E08600"
-COLOR_CRIT = "#E5484D"
-COLOR_NEUTRO = "#5B616E"
+COLOR_OK = "#5BE49B"
+COLOR_ALERTA = "#F5B062"
+COLOR_CRIT = "#F87171"
+COLOR_NEUTRO = "#B4BCC5"
 
 RUBROS_PORCENTAJE = {"pct_aprobacion", "pct_conversion_agenda"}
 RUBROS_SIN_META = {"cuotas_mes", "vencidas_num", "vencidas_dinero"}
@@ -153,7 +153,7 @@ with c_car:
     vencidas_n = M["vencidas_num"].get("mes")
     kpi("Recaudo del mes", cop(M["pagos_dinero"].get("mes")),
         sub=f"{fmt_valor('pagos_num', M['pagos_num'].get('mes'), False)} pagos de cuotas")
-    kpi("Cuotas vencidas", cop(M["vencidas_dinero"].get("mes")), valor_color=COLOR_CRIT if vencidas_n else "#1A1D23",
+    kpi("Cuotas vencidas", cop(M["vencidas_dinero"].get("mes")), valor_color=COLOR_CRIT if vencidas_n else "#EEF2F4",
         sub=f"{fmt_valor('vencidas_num', vencidas_n, False)} cuotas sin pagar a la fecha")
     kpi("Mora total", cop(M["mora_total"].get("mes")), sub="créditos activos en mora")
     st.subheader("📦 Inventario")
@@ -233,15 +233,15 @@ with st.expander("📋 Ver todos los indicadores en detalle"):
             else:  # contra lo esperado A HOY, no contra la meta del mes completo
                 txt, color = estado(val, meta_a_hoy(clave, objetivo), es_negativo_malo=(clave == "mora_total"))
             filas += (f"<div style='display:flex;justify-content:space-between;align-items:center;padding:9px 2px;"
-                      f"border-top:1px solid #EEF0F3'>"
-                      f"<span style='font-size:14px;color:#3A3F4A'>{hsafe(mx.RUBRO_LABEL[clave])}</span>"
+                      f"border-top:1px solid #FFFFFF14'>"
+                      f"<span style='font-size:14px;color:#D5DAE0'>{hsafe(mx.RUBRO_LABEL[clave])}</span>"
                       f"<span style='display:flex;align-items:center;gap:10px'>"
-                      f"<span style='font-size:14px;font-weight:700;color:#1A1D23'>"
+                      f"<span style='font-size:14px;font-weight:700;color:#EEF2F4'>"
                       f"{hsafe(fmt_valor(clave, val, es_dinero))}</span>"
                       f"<span style='font-size:11px;color:{color};min-width:74px;text-align:right'>● {txt}</span>"
                       f"</span></div>")
         if corte:
-            filas += f"<div style='font-size:11px;color:#8A909C;margin-top:8px'>Corte: {corte}</div>"
+            filas += f"<div style='font-size:11px;color:#8E98A3;margin-top:8px'>Corte: {corte}</div>"
         html(f"<div style='{CARD}margin-bottom:12px'>{filas}</div>")
 
 st.divider()

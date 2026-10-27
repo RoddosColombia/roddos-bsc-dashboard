@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 import formatos
+import graficos
 import historico
 from utils import cop, estilo_roddos, encabezado, kpi, VERDE, ROJO, NEUTRO, CIAN
 
@@ -84,15 +85,19 @@ clave, tipo = opciones[elegido]
 valores = [f["datos"].get(clave) for f in fotos]
 metas = [(f["datos"].get("_metas") or {}).get(clave) for f in fotos]
 
+# en el eje, meses cortos ("Sep 26", "Oct 26*") para que no se corten; la tabla mantiene el nombre completo
+eje = [MESES[int(f["periodo"][5:])][:3].capitalize() + " " + f["periodo"][2:4]
+       + ("*" if historico.es_reconstruida(f) else "") for f in fotos]
 fig = go.Figure()
-fig.add_trace(go.Bar(x=etiquetas, y=valores, name=elegido, marker_color=CIAN))
+fig.add_trace(go.Bar(x=eje, y=valores, name=elegido, marker_color=CIAN))
 if any(m is not None for m in metas):
-    fig.add_trace(go.Scatter(x=etiquetas, y=metas, name="Meta", mode="lines+markers",
-                             line=dict(color="#1A1D23", dash="dash")))
+    fig.add_trace(go.Scatter(x=eje, y=metas, name="Meta", mode="lines+markers",
+                             line=dict(color="#EEF2F4", dash="dash")))
 fig.update_layout(height=380, legend=dict(orientation="h", y=1.12),
-                  paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#1A1D23",
+                  paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#EEF2F4",
                   yaxis_tickformat=".0%" if tipo == "porcentaje" else None)
-st.plotly_chart(fig, use_container_width=True)
+graficos.pulir(fig, tipo)
+st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 # ---- Tabla completa ----
 with st.expander("📋 Ver tabla de todos los meses"):

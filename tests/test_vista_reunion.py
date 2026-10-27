@@ -52,7 +52,7 @@ def test_cascada_resultado():
 
 def test_tendencia_marca_reconstruidos():
     f = g.tendencia("Ventas", ["Sep", "Oct"], [11, 10], [100, 30], [True, False])
-    assert list(f.data[0].marker.color) == ["#9FE3EE", g.CIAN]
+    assert list(f.data[0].marker.color) == ["rgba(56,217,240,0.35)", g.CIAN]
     assert list(f.data[1].y) == [100, 30]
 
 
@@ -109,3 +109,47 @@ def test_cascada_barra_chica_lleva_la_etiqueta_afuera():
     w = g.cascada_resultado(200e6, 175e6, 120e6, 250e6).data[0]
     assert w.textposition[-1] == "outside"     # resultado de 5 M: no cabe adentro
     assert w.textposition[3] == "inside"       # pago Auteco de 250 M: adentro, en blanco
+
+
+# ---------------------------------------------------------------- valores sobre las columnas (pedido de los jefes)
+
+def test_pulir_pone_el_valor_en_cada_columna_y_quita_el_zoom():
+    fig = go.Figure([go.Bar(x=["Sep", "Oct"], y=[58e6, 4.5e6], name="Recaudo"),
+                     go.Bar(x=["Sep", "Oct"], y=[60e6, 60e6], name="Meta de la semana")])
+    g.pulir(fig, "dinero")
+    assert list(fig.data[0].text) == ["58,0 M", "4,5 M"]
+    assert fig.data[1].text is None                      # la meta es referencia: sin número
+    assert fig.data[0].textangle == 0 and fig.data[0].cliponaxis is False
+    assert fig.layout.dragmode is False and fig.layout.xaxis.fixedrange and fig.layout.yaxis.fixedrange
+    assert fig.layout.yaxis.range[1] == pytest.approx(60e6 * 1.2)   # espacio para el número de la más alta
+
+
+def test_pulir_barras_horizontales_y_porcentajes():
+    fig = g.pulir(go.Figure(go.Bar(x=[3e6, 1e6], y=["Nómina", "Arriendo"], orientation="h")), "dinero")
+    assert list(fig.data[0].text) == ["3,0 M", "1,0 M"] and fig.layout.xaxis.range[1] == pytest.approx(3.75e6)
+    assert g.valor_corto(0.6, "porcentaje") == "60%" and g.valor_corto(1234, "numero") == "1.234"
+
+
+def test_tendencia_muestra_los_valores():
+    f = g.tendencia("Recaudo", ["Sep", "Oct"], [58e6, 4.5e6], tipo="dinero")
+    assert list(f.data[0].text) == ["58,0", "4,5"] and f.layout.dragmode is False
+
+
+def test_nombres_largos_en_varias_lineas():
+    """Caso real (RRHH, 27 oct): los nombres completos se montaban unos sobre otros."""
+    assert g.partir_etiqueta("Mary Alexandra Suárez") == "Mary Alexandra<br>Suárez"
+    assert g.partir_etiqueta("Lizbeth Rincón") == "Lizbeth<br>Rincón"
+    assert g.partir_etiqueta("Andrés") == "Andrés"
+    fig = g.pulir(go.Figure(go.Bar(x=["Yenny Paola Aya Fuentes", "Iván Echeverri"], y=[4.8e6, 16.9e6])), "dinero")
+    assert list(fig.layout.xaxis.ticktext) == ["Yenny Paola<br>Aya Fuentes", "Iván<br>Echeverri"]
+    corto = g.pulir(go.Figure(go.Bar(x=["Sep", "Oct"], y=[1, 2])))
+    assert corto.layout.xaxis.ticktext is None          # etiquetas cortas: sin cambios
+
+
+def test_pulir_con_columnas_de_pandas():
+    """Las páginas pasan columnas de pandas (no listas). Caso real: RRHH se caía con 'x or []'."""
+    import pandas as pd
+    nom = pd.DataFrame({"Empleado": ["Mary Alexandra Suárez", "Andrés Sanjuan"], "Costo": [6.9e6, 16.9e6]})
+    fig = g.pulir(go.Figure(go.Bar(x=nom["Empleado"], y=nom["Costo"])), "dinero")
+    assert list(fig.layout.xaxis.ticktext) == ["Mary Alexandra<br>Suárez", "Andrés<br>Sanjuan"]
+    assert list(fig.data[0].text) == ["6,9 M", "16,9 M"]

@@ -2,6 +2,8 @@ import streamlit as st
 import plotly.graph_objects as go
 import os
 
+import graficos
+
 from utils import cop, estilo_roddos, encabezado, kpi, pedir_archivos, cargar_o_detener, sincronizar_sharepoint
 import acceso
 import data_sources as ds
@@ -48,11 +50,12 @@ st.write("")
 st.subheader("Costo total empresa por persona")
 nom = rrhh["nomina"]
 fig = go.Figure()
-fig.add_trace(go.Bar(x=nom["Empleado"], y=nom["COSTO TOTAL EMPRESA/MES"], marker_color="#00B8D4", name="Costo total empresa"))
-fig.add_trace(go.Bar(x=nom["Empleado"], y=nom["Total devengado"], marker_color="#3A6E7A", name="Total devengado"))
+fig.add_trace(go.Bar(x=nom["Empleado"], y=nom["COSTO TOTAL EMPRESA/MES"], marker_color="#38D9F0", name="Costo total empresa"))
+fig.add_trace(go.Bar(x=nom["Empleado"], y=nom["Total devengado"], marker_color="#5BE49B", name="Total devengado"))
 fig.update_layout(barmode="group", yaxis_title="$/mes", height=420, legend=dict(orientation="h", y=1.1),
-                  paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#1A1D23")
-st.plotly_chart(fig, use_container_width=True)
+                  paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#EEF2F4")
+graficos.pulir(fig, "dinero")
+st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 st.caption("Costo total empresa incluye aportes patronales y provisión de prestaciones; total devengado es lo que recibe el empleado.")
 
 with st.expander("Ver tabla completa de nómina"):
