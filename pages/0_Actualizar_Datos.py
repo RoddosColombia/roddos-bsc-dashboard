@@ -32,7 +32,7 @@ else:
         except (TypeError, ValueError):
             return "—"
 
-    with st.container(border=True):
+    with st.container(border=True, key="vidrio_sharepoint"):
         st.subheader("🔄 Conexión con SharePoint")
         if "_error" in _cfg_sp:
             st.error(_cfg_sp["_error"])
@@ -103,7 +103,7 @@ es_director = acceso.formulario_director(
 )
 
 for fuente in FUENTES:
-    with st.container(border=True):
+    with st.container(border=True, key=f"vidrio_fuente_{fuente['clave']}"):
         c1, c2 = st.columns([2, 1])
         with c1:
             st.subheader(fuente["nombre"])

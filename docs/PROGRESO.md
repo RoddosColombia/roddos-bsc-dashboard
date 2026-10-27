@@ -32,7 +32,7 @@ Para la próxima mejora: `git switch main`, `git pull` y crear una rama nueva.
 | — | Proyección de recaudo de octubre (la genera Cobranza; la última es de septiembre) | ⏳ Depende del equipo |
 | — | Retomar la rutina diaria de actualización (los datos reales son de finales de septiembre) | ⏳ Depende del equipo |
 | — | Agenda: días clicables en la vista Mes | ✅ Hecho |
-| — | Modo oscuro (temas claro/oscuro nativos + colores adaptables, ~94 colores fijos) | 🅿️ Mejora para después |
+| — | Diseño oscuro con efecto vidrio (glassmorphism) en todo el tablero | ✅ Hecho (27 oct) |
 | — | Agenda: botón "Hoy" en las vistas Semana y Mes | ✅ Hecho |
 | — | Agenda: estado al pasar el mouse en la vista Semana; "+N más" con clic si un día tiene muchas visitas | 🅿️ Mejora para después |
 | — | Login por roles y decisiones de producto de `docs/` | 🅿️ Depende de los socios |
@@ -241,6 +241,47 @@ GitHub Actions corre los tests en cada push y en cada Pull Request (`.github/wor
     formatos.parse_actualizado ahora acepta el año literal (yyyy/aaaa) y el número de serie de Excel.
     Recomendado: cambiar la fórmula por una que no dependa del idioma (ver abajo). 255 tests.
 
+25. Diseño oscuro con efecto vidrio en todo el tablero (27 oct), a partir de la imagen de referencia:
+    tema oscuro nativo (config.toml), fondo con los anillos de RODDOS desenfocados (CSS), tarjetas y
+    menú lateral de vidrio (backdrop-filter), gráficos con fondo transparente y colores claros.
+    Hallazgo: el selector "stVerticalBlockBorderWrapper" del CSS original ya no existe en Streamlit
+    1.64 (ese estilo no se aplicaba); ahora los contenedores con borde llevan key="vidrio_..." y el CSS
+    usa la clase st-key-vidrio_... (los indicadores: st-key-vidrio_kpi_...). Revisado con capturas
+    reales del navegador en las 7 páginas (Chromium headless vía npm @sparticuz/chromium). 255 tests.
+
+26. Liquid glass + logo real de fondo (27 oct): static/roddos_fondo.png sale de LOGO_RODDOS_V3-01.PNG
+    (fondo gris quitado con la fórmula exacta de mezcla para no dejar contorno oscuro; letras tenues,
+    anillos en color; ampliado x3). Se sirve con [server] enableStaticServing = true en /app/static/.
+    Vidrio más transparente, desenfoque 24px con saturación, línea de luz arriba y reflejo en la
+    esquina. Fondo con blur(5px) y brillo 0.72 para que los números se lean. Revisado con capturas.
+
+27. Fondo con la palabra RODDOS completa y sutil (logo a 118vw; letras al 24% de opacidad) y cada
+    gráfica (medidores, embudo, tendencias, cascada, Tesorería, RRHH, Histórico) en su propia
+    tarjeta de vidrio líquido (regla CSS sobre stPlotlyChart). Revisado con capturas.
+
+28. Fondo igual a la otra app de RODDOS con liquid glass (27 oct): dos capas. ::before = anillos
+    grandes decorativos a la derecha (CSS, centro 80vw/49vh, desenfocados); ::after = el logo
+    completo muy sutil abajo, a la derecha del menú lateral. Las gráficas siguen en tarjetas de vidrio.
+
+29. Fondo ajustado a la referencia (27 oct): los anillos de la derecha son el SÍMBOLO del logo
+    (static/roddos_anillos.png: arcos verdes y cian, no círculos completos), a 80vh, casi saliéndose
+    por la derecha y desenfocados; el logo completo sutil pasa a la izquierda (abajo).
+
+30. Fondo (27 oct): palabra RODDOS más grande (112vw), cruzando la pantalla con la "S" afuera; símbolo
+    de anillos más grande (92vh) y más arriba, con el círculo azul pequeño justo antes del borde derecho.
+
+31. Gráficas y avisos (27 oct): valor de cada columna escrito en la gráfica (pedido de los jefes;
+    graficos.pulir), sin barra de herramientas ni zoom accidental, meses cortos en el Histórico, sin
+    scroll en las tarjetas de gráficas (el padding lo causaba). Avisos rojos/amarillos en vidrio con
+    base oscura para que se lean sobre el fondo.
+
+32. RRHH (27 oct): los nombres completos se montaban en el eje. graficos.pulir parte las etiquetas
+    largas en dos líneas equilibradas. De paso, revisando en el navegador con datos reales: pulir()
+    fallaba con columnas de pandas ("x or []"); corregido y cubierto con un test. 260 tests.
+
+33. Agenda (27 oct): abre en la vista Mes. El calendario (Mes y Semana) va dentro de UNA tarjeta de
+    vidrio líquido (no día por día: el desenfoque de 35 celdas sería pesado en proyectores).
+
 ## Mantenimiento
 - El secreto de la aplicación "Dashboard BSC RODDOS" en Entra vence a los 12 meses de creado
   (octubre 2027). Antes de esa fecha: Entra → Registros de aplicaciones → Certificados y secretos →
@@ -250,3 +291,8 @@ GitHub Actions corre los tests en cada push y en cada Pull Request (`.github/wor
 - Fórmula recomendada para K2 del inventario (funciona en Excel en inglés y en español):
   ="Actualizado: "&DAY(TODAY())&"/"&MONTH(TODAY())&"/"&YEAR(TODAY())
   En Excel en español se escribe: ="Actualizado: "&DIA(HOY())&"/"&MES(HOY())&"/"&AÑO(HOY())
+- Fondo: símbolo de anillos static/roddos_anillos.png (.stApp::before) y logo sutil
+  static/roddos_fondo.png (.stApp::after). Posición, tamaño y desenfoque en utils.py. La carpeta static/ SÍ va al repositorio.
+- Estilo visual: utils.py (_ESTILO, CARD y la paleta TXT/CIAN/VERDE...). Un contenedor nuevo con borde
+  necesita key="vidrio_<algo>" para verse como vidrio. Los acentos van en hex de 6 dígitos (algunas
+  piezas les agregan transparencia al final, p. ej. f"{color}1F").

@@ -3,20 +3,22 @@ import os
 import base64
 import streamlit as st
 
-# Identidad de marca RODDOS — tema CLARO con acentos de marca
-NEGRO = "#0F1115"
-CIAN = "#00B8D4"    # cian legible sobre fondo claro
-VERDE = "#00A344"
-AMBAR = "#E08600"
-ROJO = "#E5484D"
-NEUTRO = "#8A909C"
+# Identidad de marca RODDOS — tema OSCURO con efecto vidrio. Acentos claros para buen
+# contraste sobre fondo oscuro. Los acentos van en hex de 6 dígitos: hero() y otras
+# piezas les agregan transparencia al final (p. ej. f"{color}1F").
+NEGRO = "#0B0E10"
+CIAN = "#38D9F0"
+VERDE = "#5BE49B"
+AMBAR = "#F5B062"
+ROJO = "#F87171"
+NEUTRO = "#8E98A3"
 
-TXT = "#1A1D23"     # texto principal
-TXT2 = "#5B616E"    # texto secundario
-MUT = "#8A909C"     # muted / captions
-CARD_BG = "#FFFFFF"
-BORDE = "#E6E8EC"
-TRACK = "#EAECEF"   # fondo de barras
+TXT = "#EEF2F4"     # texto principal
+TXT2 = "#B4BCC5"    # texto secundario
+MUT = "#8E98A3"     # muted / captions
+CARD_BG = "#1C2225B8"   # vidrio (con transparencia)
+BORDE = "#FFFFFF1F"
+TRACK = "#FFFFFF1A"     # fondo de barras
 
 LOGO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "roddos_logo_blanco.png")
 try:
@@ -36,38 +38,117 @@ h1, h2, h3, h4, h5, h6 {
     font-family: 'Montserrat', sans-serif;
     font-weight: 700;
     letter-spacing: -0.01em;
+    color: #EEF2F4;
 }
-h1, h2, h3, h4, h5, h6 { color: #1A1D23; }
 
-/* Más aire y ancho controlado para que no se vea recargado */
-[data-testid="stMainBlockContainer"] { padding-top: 1.6rem; max-width: 1160px; }
+/* ---------- Fondo: dos capas, igual que la otra app de RODDOS con liquid glass ----------
+   1) ::before = el SÍMBOLO de anillos del logo (static/roddos_anillos.png: arcos verdes y cian),
+      ampliado y desenfocado, saliéndose por la derecha: el círculo azul pequeño del centro (en el
+      46,8% / 50,8% del símbolo, radio 9,6%) queda justo antes del borde.
+   2) ::after  = el logo completo de RODDOS (static/roddos_fondo.png), muy sutil y grande, cruzando la
+      pantalla de izquierda a derecha (la "S" se sale por la derecha).
+   Tamaños en vh/vw para que se vea igual en cualquier pantalla. */
+.stApp { background: #0E1214; }
+.stApp::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background: url("/app/static/roddos_anillos.png") no-repeat;
+    background-size: 92vh 92vh;
+    /* x: borde derecho del círculo pequeño a 1,5vw del borde  ->  98,5vw - 0,096·92vh - 0,468·92vh
+       y: centro del símbolo al 40% del alto                   ->  40vh - 0,508·92vh */
+    background-position: calc(98.5vw - 51.9vh) -6.7vh;
+    filter: blur(10px) saturate(0.85) brightness(0.7);
+}
+.stApp::after {
+    content: ""; position: fixed; pointer-events: none; z-index: 0;
+    left: 2vw; width: 112vw; height: 38vw;                 /* 112vw: la "S" queda fuera de la pantalla */
+    bottom: calc(11vh - 10.6vw);                          /* la base de las letras al ~89% del alto */
+    background: url("/app/static/roddos_fondo.png") no-repeat left bottom / contain;
+    opacity: 0.55; filter: blur(1.5px);
+}
+[data-testid="stAppViewContainer"] { position: relative; z-index: 1; background: transparent; }
+[data-testid="stHeader"], [data-testid="stMain"], [data-testid="stBottom"] > div { background: transparent; }
 
-/* Tarjetas de indicadores (st.container(border=True)) — claras */
-[data-testid="stVerticalBlockBorderWrapper"] {
-    background: #FFFFFF;
-    border: 1px solid #E6E8EC !important;
-    border-radius: 16px;
-    box-shadow: 0 1px 2px rgba(16,24,40,0.05);
+/* Más aire y ancho controlado */
+[data-testid="stMainBlockContainer"] { padding-top: 1.6rem; max-width: 1180px; }
+
+/* ---------- Vidrio: tarjetas de Streamlit y expanders ----------
+   Streamlit 1.64 no marca los contenedores con borde: cada uno lleva key="vidrio_..." y
+   Streamlit le pone la clase st-key-vidrio_... (el selector de antes ya no existía). */
+[class*="st-key-vidrio"] {
+    background: linear-gradient(145deg, rgba(255,255,255,0.11) 0%, rgba(255,255,255,0.035) 45%, rgba(255,255,255,0.065) 100%), rgba(26,31,33,0.36);
+    backdrop-filter: blur(24px) saturate(175%);
+    -webkit-backdrop-filter: blur(24px) saturate(175%);
+    border: 1px solid rgba(255,255,255,0.16) !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -1px 0 rgba(0,0,0,0.25), 0 14px 40px rgba(0,0,0,0.38);
+    border-radius: 26px; position: relative;
 }
-[data-testid="stVerticalBlockBorderWrapper"] h3 {
-    color: #1A1D23;
-    font-size: 1.85rem;
-    font-weight: 800;
-    margin: 0.15rem 0 0.35rem 0;
+/* tarjetas grandes (calendario de la Agenda): aire interior */
+[class*="st-key-vidrio_agenda"] { padding: 18px 18px 26px; }
+/* reflejo suave en la esquina superior izquierda (el "brillo" del vidrio líquido) */
+[class*="st-key-vidrio"]::before {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    background: radial-gradient(120% 70% at 0% 0%, rgba(255,255,255,0.10), transparent 55%);
 }
-[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stCaptionContainer"]:first-child p {
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    font-size: 0.68rem;
-    color: #8A909C;
-    font-weight: 600;
+/* Solo en las tarjetas de indicadores: cifra grande y título pequeño en mayúsculas */
+[class*="st-key-vidrio_kpi"] h3 {
+    color: #EEF2F4; font-size: 1.85rem; font-weight: 800; margin: 0.15rem 0 0.35rem 0;
 }
-/* Barra de progreso y acentos en cian */
-[data-testid="stProgress"] div[role="progressbar"] > div { background-color: #00B8D4; }
-/* Selector de período: activo en cian */
+[class*="st-key-vidrio_kpi"] [data-testid="stCaptionContainer"]:first-child p {
+    text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.68rem; color: #8E98A3; font-weight: 600;
+}
+[data-testid="stExpander"] details {
+    background: linear-gradient(145deg, rgba(255,255,255,0.11) 0%, rgba(255,255,255,0.035) 45%, rgba(255,255,255,0.065) 100%), rgba(26,31,33,0.36);
+    backdrop-filter: blur(24px) saturate(175%);
+    -webkit-backdrop-filter: blur(24px) saturate(175%);
+    border: 1px solid rgba(255,255,255,0.16) !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -1px 0 rgba(0,0,0,0.25), 0 14px 40px rgba(0,0,0,0.38);
+    border-radius: 20px;
+}
+
+/* ---------- Menú lateral: panel de vidrio flotante ---------- */
+[data-testid="stSidebar"] { background: transparent; border-right: none; }
+[data-testid="stSidebarContent"] {
+    background: linear-gradient(145deg, rgba(255,255,255,0.11) 0%, rgba(255,255,255,0.035) 45%, rgba(255,255,255,0.065) 100%), rgba(26,31,33,0.36);
+    backdrop-filter: blur(24px) saturate(175%);
+    -webkit-backdrop-filter: blur(24px) saturate(175%);
+    border: 1px solid rgba(255,255,255,0.16) !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -1px 0 rgba(0,0,0,0.25), 0 14px 40px rgba(0,0,0,0.38);
+    border-radius: 26px;
+    margin: 14px; height: calc(100% - 28px);
+    width: calc(100% - 28px); box-sizing: border-box;   /* margen a ambos lados, sin salirse */
+}
+[data-testid="stSidebarNav"] a { border-radius: 12px; }
+[data-testid="stSidebarNav"] a[aria-current="page"] { background: #5BE49B26; }
+[data-testid="stSidebarNav"] a[aria-current="page"] span { color: #EEF2F4; font-weight: 700; }
+
+/* ---------- Acentos ---------- */
+[data-testid="stProgress"] div[role="progressbar"] > div { background-color: #5BE49B; }
 [data-testid="stSegmentedControl"] button[aria-checked="true"] {
-    background: #E6F7FB; border-color: #00B8D4; color: #008BA3;
+    background: #5BE49B26; border-color: #5BE49B; color: #5BE49B;
 }
+/* Gráficos: cada uno en su tarjeta de vidrio líquido */
+[data-testid="stPlotlyChart"] {
+    background: linear-gradient(145deg, rgba(255,255,255,0.11) 0%, rgba(255,255,255,0.035) 45%, rgba(255,255,255,0.065) 100%), rgba(26,31,33,0.36);
+    backdrop-filter: blur(24px) saturate(175%);
+    -webkit-backdrop-filter: blur(24px) saturate(175%);
+    border: 1px solid rgba(255,255,255,0.16);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -1px 0 rgba(0,0,0,0.25), 0 14px 40px rgba(0,0,0,0.38);
+    border-radius: 24px; padding: 0; overflow: hidden; margin-bottom: 6px;   /* sin padding: evita el scroll */
+}
+/* sin la barra de herramientas de Plotly (zoom, mover...): es un tablero de consulta */
+.modebar-container { display: none !important; }
+
+/* ---------- Avisos rojos / amarillos / azules en vidrio líquido ----------
+   Base oscura y desenfoque DEBAJO del color del aviso: el texto se lee limpio aunque detrás pasen
+   los anillos del fondo. */
+[data-testid="stAlert"] {
+    background: rgba(14,18,20,0.66);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    border-radius: 22px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 14px 40px rgba(0,0,0,0.38);
+}
+[data-testid="stAlertContainer"] { border-radius: 22px; border: 1px solid rgba(255,255,255,0.12); }
 </style>
 """
 
@@ -78,18 +159,22 @@ def estilo_roddos():
 
 
 def encabezado(subtitulo=""):
-    """Cabecera con el logo de RODDOS en una franja oscura de marca (se ve sobre el fondo claro)."""
+    """Cabecera de vidrio con el logo de RODDOS (blanco) y el subtítulo de la página."""
     img = (f"<img src='data:image/png;base64,{LOGO_B64}' style='height:56px;display:block'/>"
            if LOGO_B64 else
            "<span style='color:#fff;font-family:Montserrat,sans-serif;font-weight:800;font-size:34px'>RODDOS</span>")
-    sub = (f"<div style='color:#AEB4BD;font-size:13px;margin-top:6px;font-family:Montserrat,sans-serif'>{subtitulo}</div>"
+    sub = (f"<div style='color:{TXT2};font-size:14px;margin-top:8px;font-family:Montserrat,sans-serif'>{subtitulo}</div>"
            if subtitulo else "")
-    st.markdown(
-        f"<div style='background:#0F1115;border-radius:16px;padding:18px 24px;margin-bottom:16px'>{img}{sub}</div>",
-        unsafe_allow_html=True)
+    st.markdown(f"<div style='{CARD}padding:20px 26px;margin-bottom:18px'>{img}{sub}</div>", unsafe_allow_html=True)
 
 
-CARD = "background:#FFFFFF;border:1px solid #E6E8EC;border-radius:16px;padding:16px 18px;box-shadow:0 1px 2px rgba(16,24,40,0.05);"
+# Tarjeta de vidrio líquido para el HTML propio (kpi, hero, tarjetas de las páginas)
+CARD = ("background:linear-gradient(145deg,rgba(255,255,255,0.11) 0%,rgba(255,255,255,0.035) 45%,"
+        "rgba(255,255,255,0.065) 100%),rgba(26,31,33,0.36);"
+        "backdrop-filter:blur(24px) saturate(175%);-webkit-backdrop-filter:blur(24px) saturate(175%);"
+        "border:1px solid rgba(255,255,255,0.16);border-radius:24px;padding:18px 20px;"
+        "box-shadow:inset 0 1px 0 rgba(255,255,255,0.28),inset 0 -1px 0 rgba(0,0,0,0.25),0 14px 40px rgba(0,0,0,0.38);"
+        "margin-bottom:14px;")
 
 
 def html(s):
@@ -222,14 +307,14 @@ def cop(n) -> str:
 
 
 PALETTE = {
-    "financiera": "#2E4053",
-    "cliente": "#1F6F5C",
-    "procesos": "#B7791F",
-    "aprendizaje": "#6B46C1",
-    "ok": "#1F6F5C",
-    "alerta": "#B7791F",
-    "critico": "#9C2B0F",
-    "neutro": "#7A7A7A",
+    "financiera": "#7FB3D5",
+    "cliente": "#5BE49B",
+    "procesos": "#F5B062",
+    "aprendizaje": "#B794F4",
+    "ok": "#5BE49B",
+    "alerta": "#F5B062",
+    "critico": "#F87171",
+    "neutro": "#8E98A3",
 }
 
 

@@ -54,7 +54,7 @@ for _, row in emb.iterrows():
 
 total_general = sum(len(v) for v in por_dia.values())
 
-vista = st.segmented_control("Vista", ["Semana", "Mes"], default="Semana", label_visibility="collapsed",
+vista = st.segmented_control("Vista", ["Semana", "Mes"], default="Mes", label_visibility="collapsed",
                              key="ag_vista")
 
 
@@ -93,18 +93,19 @@ if vista == "Semana":
         unsafe_allow_html=True)
 
     hoy = formatos.hoy_colombia()
-    cols = st.columns(7)
+    # toda la semana en una sola tarjeta de vidrio líquido (el fondo no se cruza con los días)
+    cols = st.container(key="vidrio_agenda_semana").columns(7)
     for d, col in zip(dias, cols):
         clientes = por_dia.get(d, [])
         es_hoy = d == hoy
         borde = f"2px solid {CIAN}" if es_hoy else f"1px solid {BORDE}"
         cuerpo = "".join(chip(n, c) for n, _, c in clientes) or f"<div style='color:{MUT};font-size:12px'>—</div>"
         with col:
-            html(f"<div style='background:#FFFFFF;border:{borde};border-radius:12px;padding:10px;min-height:120px'>"
+            html(f"<div style='background:#FFFFFF0D;border:{borde};border-radius:12px;padding:10px;min-height:120px'>"
                  f"<div style='display:flex;justify-content:space-between;align-items:baseline;"
                  f"border-bottom:1px solid {BORDE};padding-bottom:6px;margin-bottom:8px'>"
                  f"<span style='font-weight:700;font-size:13px;font-family:Montserrat,sans-serif'>{DIAS[d.weekday()]} {d.day}</span>"
-                 f"<span style='background:#E6F7FB;color:#008BA3;font-size:12px;font-weight:700;padding:1px 8px;border-radius:20px'>{len(clientes)}</span>"
+                 f"<span style='background:#38D9F026;color:#7DE8F7;font-size:12px;font-weight:700;padding:1px 8px;border-radius:20px'>{len(clientes)}</span>"
                  f"</div><div style='display:flex;flex-direction:column;gap:2px'>{cuerpo}</div></div>")
     leyenda()
 
@@ -156,8 +157,8 @@ else:  # Mes
         clientes = por_dia.get(d, [])
         es_sel, es_hoy = d == sel, d == hoy
         borde = f"2px solid {CIAN}" if (es_hoy or es_sel) else f"1px solid {BORDE}"
-        fondo = "#E6F7FB" if es_sel else "#FFFFFF"
-        badge = (f"<span style='background:#E6F7FB;color:#008BA3;font-size:11px;font-weight:700;"
+        fondo = "#38D9F026" if es_sel else "#FFFFFF0D"
+        badge = (f"<span style='background:#38D9F026;color:#7DE8F7;font-size:11px;font-weight:700;"
                  f"padding:0 6px;border-radius:10px'>{len(clientes)}</span>") if clientes else ""
         puntos = "".join(f"<span title='{hsafe(n)} · {hsafe(t)}' style='width:8px;height:8px;border-radius:50%;"
                          f"background:{c};display:inline-block'></span>" for n, t, c in clientes[:10])
@@ -169,7 +170,8 @@ else:  # Mes
                 f"<span style='font-size:12px;color:{TXT};font-weight:{700 if es_sel else 400}'>{d.day}</span>{badge}</div>"
                 f"<div style='display:flex;flex-wrap:wrap;gap:3px;margin-top:6px'>{puntos}</div></div>")
 
-    with st.container(key="ag_cal"):
+    # todo el mes en una sola tarjeta de vidrio líquido; adentro, ag_cal maneja los clics de los días
+    with st.container(key="vidrio_agenda_mes"), st.container(key="ag_cal"):
         for col, nombre_dia in zip(st.columns(7), DIAS):
             col.markdown(f"<div style='text-align:center;font-size:11px;font-weight:700;color:{TXT2};"
                          f"font-family:Montserrat,sans-serif'>{nombre_dia}</div>", unsafe_allow_html=True)
