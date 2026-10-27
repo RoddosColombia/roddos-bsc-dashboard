@@ -282,6 +282,11 @@ GitHub Actions corre los tests en cada push y en cada Pull Request (`.github/wor
 33. Agenda (27 oct): abre en la vista Mes. El calendario (Mes y Semana) va dentro de UNA tarjeta de
     vidrio líquido (no día por día: el desenfoque de 35 celdas sería pesado en proyectores).
 
+34. Fondo en PRODUCCIÓN (27 oct): en Streamlit Cloud el fondo salía negro. Causa: la ruta absoluta
+    "/app/static/..." en el CSS; Streamlit Cloud sirve la app en una subruta (/~/+/) y esa ruta daba
+    404. Ahora es relativa ("app/static/..."). Comprobado sirviendo la app en una subruta local
+    (server.baseUrlPath): absoluta 404, relativa 200 en la portada y en las páginas internas.
+
 ## Mantenimiento
 - El secreto de la aplicación "Dashboard BSC RODDOS" en Entra vence a los 12 meses de creado
   (octubre 2027). Antes de esa fecha: Entra → Registros de aplicaciones → Certificados y secretos →
