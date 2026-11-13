@@ -21,7 +21,8 @@ from funnel import almacen, calculo, fuentes, inventario
 
 INICIO = dt.datetime(2026, 8, 1, 5, 0)  # 1-ago-2026 00:00 hora Colombia, en UTC
 SITIO = "roddossas.sharepoint.com:/sites/RODDOSSAS"
-RUTA_INVENTARIO = "RODDOS/2. OPERACIONES/MOTOS/Inventario 2026.xlsx"
+# El Inventario vigente vive en la carpeta del dashboard (la copia de 2. OPERACIONES/MOTOS ya no existe).
+RUTA_INVENTARIO = "RODDOS/8. DASHBOARD BSC RODDOS/1 Fuentes al día/Inventario 2026.xlsx"
 
 
 def _cargar_env(ruta):
