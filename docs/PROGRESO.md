@@ -287,11 +287,28 @@ GitHub Actions corre los tests en cada push y en cada Pull Request (`.github/wor
     404. Ahora es relativa ("app/static/..."). Comprobado sirviendo la app en una subruta local
     (server.baseUrlPath): absoluta 404, relativa 200 en la portada y en las páginas internas.
 
+35. Página 📣 Marketing: funnel por canal y campaña (13 nov). Automático, sin Excel manual:
+    funnel/ calcula cada día (GitHub Actions, .github/workflows/funnel.yml, 6 a. m. Colombia) cruzando
+    CRM-RODDOS (WhatsApp/Instagram/Messenger, anuncios de Meta, códigos LP), RODDOS-web (solicitudes,
+    origen guardado, decisión del asesor) y la pestaña Facturación del Inventario (ventas). Guarda SOLO
+    totales en bsc_dashboard.funnel_resumen ("actual" + "anterior"); la página solo los lee.
+    Modelo de atribución: CRM-RODDOS/docs/investigacion/09-modelo-atribucion-funnel.md (primer toque en
+    30 días antes de la solicitud; venta ↔ solicitud por documento y si no por celular).
+    "Canal venta" se convierte a la lista estándar de 10 opciones (funnel/canal_venta.py).
+    Accesos (secretos del repo en GitHub): RODDOS_WEB_FUNNEL_URI y CRM_FUNNEL_URI (usuarios
+    bsc_funnel_lectura, solo lectura), BSC_FUNNEL_URI (bsc_funnel_escritura, readWrite solo en
+    bsc_dashboard, proyecto SISMO-V3) y SHAREPOINT_* (los mismos de Streamlit).
+    Validado con datos reales contra la Fase 0. Hallazgo corregido en el camino: el aviso automático
+    "Recibimos tu solicitud" llega segundos DESPUÉS de crearla; con margen se contaba como "contacto
+    iniciado por RODDOS" (105 en vez de 33). Ahora la conversación cuenta solo si empezó antes. 310 tests.
+
 ## Mantenimiento
 - El secreto de la aplicación "Dashboard BSC RODDOS" en Entra vence a los 12 meses de creado
   (octubre 2027). Antes de esa fecha: Entra → Registros de aplicaciones → Certificados y secretos →
   nuevo secreto → reemplazar client_secret en los Secrets de Streamlit Cloud. Si vence, el tablero
   deja de actualizarse y el panel de "Actualizar datos" muestra el error AADSTS7000222.
+- Funnel de marketing: si la página 📣 Marketing dice "Actualizado el …" con más de un día, revisar
+  GitHub → Actions → "Funnel de marketing" (el error sale en español). Se corre a mano con "Run workflow".
 - Si Streamlit Cloud no toma un merge a main: share.streamlit.io → ⋮ → Reboot app.
 - Fórmula recomendada para K2 del inventario (funciona en Excel en inglés y en español):
   ="Actualizado: "&DAY(TODAY())&"/"&MONTH(TODAY())&"/"&YEAR(TODAY())

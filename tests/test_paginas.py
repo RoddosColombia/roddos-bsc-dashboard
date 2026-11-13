@@ -11,7 +11,8 @@ import fixtures_excel as fx
 RAIZ = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 CLAVE = "clave-de-prueba"
 PAGINAS = ["app.py", "pages/0_Actualizar_Datos.py", "pages/1_Tesoreria.py", "pages/2_RRHH.py",
-           "pages/3_Vista_Reunion.py", "pages/4_Agenda.py", "pages/5_Historico.py"]
+           "pages/3_Vista_Reunion.py", "pages/4_Agenda.py", "pages/5_Historico.py",
+           "pages/6_Marketing.py"]
 
 
 def abrir(pagina, como_director=True):
