@@ -68,6 +68,7 @@ El tablero **no lee tus archivos automáticamente** — hay que subirlos:
 | Tesorería | `Flujo de pagos deudas.xlsx` |
 | RRHH | `Control_RRHH_Nomina_RODDOS_2026.xlsx` |
 | Marketing / leads | `Embudo_Comercial_RODDOS.xlsx` (si no lo tienes, descárgalo desde la página principal) |
+| 📣 Marketing (funnel por canal y campaña) | Ninguno: se calcula solo cada día a las 6 a. m. |
 | Metas de todas las páginas | `Metas_RODDOS.xlsx` (agrega una fila nueva cada mes, no borres las anteriores) |
 
 ## Si algo sale mal

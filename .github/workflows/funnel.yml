@@ -1,0 +1,39 @@
+# Calcula el funnel de marketing una vez al día y guarda SOLO totales en bsc_dashboard.funnel_resumen
+# (los lee la página 📣 Marketing). Lee RODDOS-web, CRM-RODDOS y el Inventario de SharePoint con
+# usuarios de solo lectura; el único permiso de escritura es sobre la base del tablero.
+# También se puede correr a mano: Actions → "Funnel de marketing" → Run workflow.
+name: Funnel de marketing
+
+on:
+  schedule:
+    - cron: "0 11 * * *"   # 6:00 a. m. hora Colombia (11:00 UTC)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: funnel
+  cancel-in-progress: false
+
+jobs:
+  calcular:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: pip install -r requirements.txt
+      - name: Calcular y guardar el funnel
+        env:
+          RODDOS_WEB_FUNNEL_URI: ${{ secrets.RODDOS_WEB_FUNNEL_URI }}
+          CRM_FUNNEL_URI: ${{ secrets.CRM_FUNNEL_URI }}
+          BSC_FUNNEL_URI: ${{ secrets.BSC_FUNNEL_URI }}
+          SHAREPOINT_TENANT_ID: ${{ secrets.SHAREPOINT_TENANT_ID }}
+          SHAREPOINT_CLIENT_ID: ${{ secrets.SHAREPOINT_CLIENT_ID }}
+          SHAREPOINT_CLIENT_SECRET: ${{ secrets.SHAREPOINT_CLIENT_SECRET }}
+        run: python -m funnel.ejecutar
