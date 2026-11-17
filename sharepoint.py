@@ -26,6 +26,7 @@ Configuración en .streamlit/secrets.toml (sin esta sección, nada de esto se ac
 Permiso necesario en Microsoft Entra ID: Sites.Selected (aplicación) con rol "read" sobre el sitio.
 """
 import datetime
+import gc
 import json
 import os
 import threading
@@ -256,6 +257,7 @@ def sincronizar(cliente, espera_minutos=5, forzar=False, ahora=None, rutas=None)
             continue
         try:
             r = carga.procesar(fuente, cliente.descargar(item["id"]))
+            gc.collect()  # liberar la memoria del archivo antes de bajar el siguiente
         except Exception as e:
             estado["_error"] = f"No se pudo descargar {item['nombre']}: {e}"
             continue

@@ -13,7 +13,9 @@ Las celdas leídas están ancladas a la estructura de hoja tal como existe hoy
 (hojas "Dashboard" de cada archivo). Si esas hojas cambian de layout, esto
 se rompe de forma visible (valores None), no de forma silenciosa.
 """
+import io
 import os
+import warnings
 import datetime
 import pandas as pd
 import openpyxl
@@ -59,6 +61,28 @@ try:
 except PyMongoError as e:
     st.warning(f"No se pudo recuperar el respaldo en la nube: {e}")
 
+# openpyxl avisa por cada extensión de Excel que no soporta (listas desplegables, formato
+# condicional) y por cada celda con formato de fecha y un número fuera de rango. Son inofensivos,
+# pero en producción llegaron a ser 550+ líneas por archivo y tapaban los errores reales.
+warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
+
+
+def abrir_excel(ruta):
+    """Abre un Excel en modo de SOLO LECTURA (fila por fila, sin cargarlo entero en memoria).
+
+    Caso real (17 nov 2026): con los archivos completos en memoria, el servidor gratuito de
+    Streamlit se quedaba sin memoria al arrancar y la app se caía ("connection reset by peer").
+    Medido con un Recaudo de 4.300 cuotas: 58 MB -> 1,1 MB y un 25% más rápido.
+    El archivo se lee primero a memoria (unos cientos de KB) para no dejarlo bloqueado en disco:
+    en modo solo lectura openpyxl lo mantiene abierto y en Windows eso impide reemplazarlo."""
+    if isinstance(ruta, (bytes, bytearray)):
+        datos = bytes(ruta)
+    else:
+        with open(ruta, "rb") as f:
+            datos = f.read()
+    return openpyxl.load_workbook(io.BytesIO(datos), data_only=True, read_only=True)
+
+
 def _filas_tabla(ws, fila_ini, col_clave, es_fila=lambda v: v is not None):
     """Números de fila de una tabla que empieza en `fila_ini`, sin tope fijo.
 
@@ -67,7 +91,7 @@ def _filas_tabla(ws, fila_ini, col_clave, es_fila=lambda v: v is not None):
     semanas, días o meses nuevos, el tablero los lee sin tocar el código.
     """
     filas = []
-    for r in range(fila_ini, ws.max_row + 1):
+    for r in range(fila_ini, (ws.max_row or fila_ini + 5000) + 1):   # max_row puede venir vacío (solo lectura)
         if not es_fila(ws[f"{col_clave}{r}"].value):
             break
         filas.append(r)
@@ -90,7 +114,7 @@ def _indice(headers, nombre, por_defecto=None):
 
 @st.cache_data(ttl=600)
 def leer_inventario(ruta=None):
-    wb = openpyxl.load_workbook(ruta or F_INVENTARIO, data_only=True)
+    wb = abrir_excel(ruta or F_INVENTARIO)
     ws = wb["Dashboard"]
 
     def g(coord):
@@ -142,7 +166,7 @@ def leer_inventario(ruta=None):
 
     # inventario motos: conteo por estado/ubicacion
     ws2 = wb["Inventario motos"]
-    header = [c.value for c in ws2[1]]
+    header = formatos.valores_fila(ws2, 1)
     idx_placa = _indice(header, "Placa", 0)
     idx_estado = _indice(header, "Estado")
     idx_ubic = _indice(header, "Ubicación")
@@ -158,17 +182,15 @@ def leer_inventario(ruta=None):
 
     plan_separe_detalle = []
     ws3 = wb["Plan separe"]
-    # localizar encabezados reales (la hoja tiene un bloque de texto arriba)
-    header_row = None
-    for r in range(1, 15):
-        vals = [ws3.cell(row=r, column=c).value for c in range(2, 12)]
+    # localizar encabezados reales (la hoja tiene un bloque de texto arriba). Se recorre fila por
+    # fila (iter_rows): en modo solo lectura, pedir celda por celda relee la hoja cada vez.
+    header_row, hdrs = None, None
+    for r, vals in enumerate(ws3.iter_rows(min_row=1, max_row=14, min_col=2, max_col=11, values_only=True), start=1):
         if "Crédito" in vals or "Cliente" in vals:
-            header_row = r
+            header_row, hdrs = r, list(vals)
             break
     if header_row:
-        hdrs = [ws3.cell(row=header_row, column=c).value for c in range(2, 12)]
-        for r in range(header_row + 1, ws3.max_row + 1):
-            vals = [ws3.cell(row=r, column=c).value for c in range(2, 12)]
+        for vals in ws3.iter_rows(min_row=header_row + 1, min_col=2, max_col=11, values_only=True):
             if all(v is None for v in vals):
                 continue
             plan_separe_detalle.append(dict(zip(hdrs, vals)))
@@ -179,7 +201,7 @@ def leer_inventario(ruta=None):
 
 @st.cache_data(ttl=600)
 def leer_recaudo(ruta=None):
-    wb = openpyxl.load_workbook(ruta or F_RECAUDO, data_only=True)
+    wb = abrir_excel(ruta or F_RECAUDO)
     wsD = wb["Dashboard"]
 
     def g(coord):
@@ -223,7 +245,7 @@ def leer_recaudo(ruta=None):
     # detalle de cuotas (fuente mas granular: pagos y vencidas por dia)
     # fila 1 = titulo de la hoja, fila 2 = encabezados reales, datos desde fila 3
     wsC = wb["Detalle Cuotas"]
-    headers = [h.strip() if isinstance(h, str) else h for h in (c.value for c in wsC[2])]
+    headers = [h.strip() if isinstance(h, str) else h for h in formatos.valores_fila(wsC, 2)]
     idx_codigo = _indice(headers, "Cód. crédito", 4)  # por nombre: no depende del orden de columnas
     rows = []
     for row in wsC.iter_rows(min_row=3, values_only=True):
@@ -241,7 +263,7 @@ _parse_fecha_corte = formatos.parse_fecha_corte  # se conserva el nombre por com
 
 @st.cache_data(ttl=600)
 def leer_tesoreria(ruta=None):
-    wb = openpyxl.load_workbook(ruta or F_TESORERIA, data_only=True)
+    wb = abrir_excel(ruta or F_TESORERIA)
     ws = wb["Tablero mes"]
 
     def g(coord):
@@ -262,7 +284,7 @@ def leer_tesoreria(ruta=None):
     )
 
     wsE = wb["Base real egresos"]
-    headersE = [c.value for c in wsE[1]]
+    headersE = formatos.valores_fila(wsE, 1)
     rowsE = [row for row in wsE.iter_rows(min_row=2, values_only=True) if row[0] is not None]
     dfE = pd.DataFrame(rowsE, columns=headersE)
     dfE["Fecha"] = pd.to_datetime(dfE["Fecha"], errors="coerce")
@@ -270,7 +292,7 @@ def leer_tesoreria(ruta=None):
     egresos = dfE[(dfE["Es duplicado"] == "No") & (dfE["Es reversado"] == "No") & (dfE["Es traslado"] == "No")].copy()
 
     wsI = wb["Base real ingresos"]
-    headersI = [c.value for c in wsI[1]]
+    headersI = formatos.valores_fila(wsI, 1)
     rowsI = [row for row in wsI.iter_rows(min_row=2, values_only=True) if row[0] is not None]
     dfI = pd.DataFrame(rowsI, columns=headersI)
     dfI["Fecha"] = pd.to_datetime(dfI["Fecha"], errors="coerce")
@@ -281,7 +303,7 @@ def leer_tesoreria(ruta=None):
     pago_auteco_mes = 0.0
     if "Facturas Auteco" in wb.sheetnames and mes_ctrl:
         wsA = wb["Facturas Auteco"]
-        headersA = [c.value for c in wsA[2]]
+        headersA = formatos.valores_fila(wsA, 2)
         idxA = {h: i for i, h in enumerate(headersA)}
         for row in wsA.iter_rows(min_row=3, values_only=True):
             mp = row[idxA.get("Mes de pago", -1)] if "Mes de pago" in idxA else None
@@ -294,7 +316,7 @@ def leer_tesoreria(ruta=None):
 
 
 def _tabla_desde(ws, col_nombre, header_row=3, data_start=4):
-    headers = [c.value for c in ws[header_row]]
+    headers = formatos.valores_fila(ws, header_row)
     filas = []
     for row in ws.iter_rows(min_row=data_start, values_only=True):
         if row[0] is None and row[1] is None:
@@ -308,7 +330,7 @@ def _tabla_desde(ws, col_nombre, header_row=3, data_start=4):
 
 @st.cache_data(ttl=600)
 def leer_rrhh(ruta=None):
-    wb = openpyxl.load_workbook(ruta or F_RRHH, data_only=True)
+    wb = abrir_excel(ruta or F_RRHH)
 
     empleados = _tabla_desde(wb["Empleados"], "Nombre completo")
     nomina = _tabla_desde(wb["NominaMensual"], "Empleado")
@@ -341,9 +363,9 @@ def leer_embudo(ruta=None):
     ruta = ruta or F_EMBUDO
     if not os.path.exists(ruta):
         return pd.DataFrame()
-    wb = openpyxl.load_workbook(ruta, data_only=True)
+    wb = abrir_excel(ruta)
     ws = wb["Embudo_Diario"]
-    headers = [h.strip() if isinstance(h, str) else h for h in (c.value for c in ws[1])]
+    headers = [h.strip() if isinstance(h, str) else h for h in formatos.valores_fila(ws, 1)]
     filas = []
     for row in ws.iter_rows(min_row=2, values_only=True):
         d = dict(zip(headers, row))
@@ -375,10 +397,10 @@ def leer_metas(referencia=None, ruta=None):
     ref = referencia or formatos.hoy_colombia()
     if isinstance(ref, datetime.datetime):
         ref = ref.date()
-    wb = openpyxl.load_workbook(ruta, data_only=True)
+    wb = abrir_excel(ruta)
     ws = wb["Metas"]
     fila_h = formatos.fila_encabezado(ws, "Mes")
-    headers = [h.strip() if isinstance(h, str) else h for h in (c.value for c in ws[fila_h])]
+    headers = [h.strip() if isinstance(h, str) else h for h in formatos.valores_fila(ws, fila_h)]
     filas = []
     for row in ws.iter_rows(min_row=fila_h + 1, values_only=True):
         d = dict(zip(headers, row))
@@ -412,7 +434,7 @@ def leer_cobranza_semanal(ruta=None):
     ruta = ruta or F_COBRANZA
     if not os.path.exists(ruta):
         return None
-    wb = openpyxl.load_workbook(ruta, data_only=True)
+    wb = abrir_excel(ruta)
     if "Dashboard" not in wb.sheetnames:
         return None
     d = wb["Dashboard"]
@@ -428,7 +450,7 @@ def leer_cobranza_semanal(ruta=None):
         if hoja is None:
             return []
         ws = wb[hoja]
-        headers = [c.value for c in ws[1]]
+        headers = formatos.valores_fila(ws, 1)
         idx = {h: i for i, h in enumerate(headers)}
         cv = idx.get("Valor cuota a pagar esta semana", idx.get("Valor cuota vencida"))
         cp = idx.get("Pagada")
@@ -477,7 +499,7 @@ def leer_cobranza_semanal(ruta=None):
     agg = {}
     if hoja_sem is not None:
         ws = wb[hoja_sem]
-        headers = [c.value for c in ws[1]]
+        headers = formatos.valores_fila(ws, 1)
         idx = {h: i for i, h in enumerate(headers)}
         cf = idx.get("Fecha de pago")
         cv = idx.get("Valor cuota a pagar esta semana")
@@ -518,7 +540,7 @@ def leer_conciliacion(ruta=None):
     ruta = ruta or F_CONCILIACION
     if not os.path.exists(ruta):
         return dict(problemas=[], n_pagos_sin_registrar=0, monto_en_riesgo=0)
-    wb = openpyxl.load_workbook(ruta, data_only=True)
+    wb = abrir_excel(ruta)
     ws = wb["Problemas y solución"]
     problemas = []
     for row in ws.iter_rows(min_row=2, values_only=True):
