@@ -30,7 +30,7 @@ T = dt.datetime(2026, 9, 10, 15)  # una solicitud cualquiera (UTC)
     ("PAUTA/FACEBOOK", canal_venta.PAUTA_META),
     ("pauta / google", canal_venta.PAUTA_GOOGLE),
     ("VOLANTEO", canal_venta.CALLE),
-    ("RODDOTIZADO", canal_venta.CLIENTE_RODDOS),
+    ("RODDOTIZADO", canal_venta.VACIO),  # solo dice que compró, no el canal
     ("SOLICITANTE ANTIGUO CREDITO", canal_venta.CLIENTE_RODDOS),
     ("ORGANICO", canal_venta.REDES_ORGANICAS),
     ("MERCATELY", canal_venta.NO_RECUERDA),
