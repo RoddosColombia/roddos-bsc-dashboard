@@ -80,7 +80,7 @@ def _probar_lectura(fuente, contenido):
 def revisar(fuente, contenido):
     """Pasos 1 y 2, sin guardar nada. Devuelve la lista de errores (vacía = se puede aceptar)."""
     try:
-        wb = openpyxl.load_workbook(io.BytesIO(contenido), data_only=True)
+        wb = ds.abrir_excel(contenido)  # solo lectura: poca memoria (ver data_sources.abrir_excel)
     except Exception as e:
         return [f"No se pudo abrir el archivo como Excel ({type(e).__name__}: {e})."]
     errores = fuente["validador"](wb)

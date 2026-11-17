@@ -83,7 +83,7 @@ def revisar(carpeta):
             continue
         revisados += 1
         try:
-            errores = val.VALIDADORES[clave](openpyxl.load_workbook(ruta, data_only=True))
+            errores = val.VALIDADORES[clave](ds.abrir_excel(ruta))
             if not errores:
                 lector(ruta=ruta)  # misma "prueba de lectura" que hace la página antes de reemplazar
         except Exception as e:

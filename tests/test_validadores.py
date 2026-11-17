@@ -20,11 +20,11 @@ FUTURO = datetime.datetime.now() + datetime.timedelta(days=30)
 
 
 def _como_se_sube(wb):
-    """Igual que la página Actualizar datos: guardar y reabrir con data_only=True."""
+    """Igual que en producción: guardar y reabrir en modo SOLO LECTURA (data_sources.abrir_excel)."""
+    import data_sources as ds
     b = io.BytesIO()
     wb.save(b)
-    b.seek(0)
-    return openpyxl.load_workbook(b, data_only=True)
+    return ds.abrir_excel(b.getvalue())
 
 
 def _borrar_columna(ws, fila_header, nombre):

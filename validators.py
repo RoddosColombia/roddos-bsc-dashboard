@@ -32,7 +32,7 @@ def _hojas_faltantes(wb, hojas_esperadas):
 
 
 def _encabezados(ws, fila_header):
-    return [c.value.strip() if isinstance(c.value, str) else c.value for c in ws[fila_header]]
+    return [v.strip() if isinstance(v, str) else v for v in formatos.valores_fila(ws, fila_header)]
 
 
 def _columnas_faltantes(ws, columnas_esperadas, fila_header):
@@ -368,7 +368,7 @@ def validar_metas(wb):
     ws = wb["Metas"]
     fila_h = formatos.fila_encabezado(ws, "Mes", por_defecto=None)  # la plantilla: fila 4, pero no se asume
     if fila_h is None:  # sin columna "Mes": mostrar la primera fila con contenido para orientar
-        fila_h = next((r for r in range(1, 11) if any(c.value is not None for c in ws[r])), 4)
+        fila_h = next((r for r in range(1, 11) if any(v is not None for v in formatos.valores_fila(ws, r))), 4)
     headers = _encabezados(ws, fila_h)
     faltan = [c for c in METAS_COLS if c not in headers]
     if faltan:

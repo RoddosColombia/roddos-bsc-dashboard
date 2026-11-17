@@ -176,3 +176,46 @@ def test_proyeccion_usa_el_largo_del_mes_de_la_fuente():
     """Inventario cortado el 30 de septiembre y Recaudo ya en octubre."""
     proy, _, _ = obj.proyeccion_rubro("ventas", 30, 40, datetime.date(2026, 10, 2), datetime.date(2026, 9, 30))
     assert proy == 30.0          # septiembre tiene 30 días: el mes ya cerró en 30
+
+
+# ---------------------------------------------------------------- memoria (caída en producción, 17 nov 2026)
+
+def test_los_excel_se_abren_en_modo_solo_lectura(tmp_path):
+    """Con los archivos completos en memoria, el servidor gratuito se quedaba sin memoria al arrancar."""
+    ruta = tmp_path / "r.xlsx"
+    fx.wb_recaudo().save(ruta)
+    wb = ds.abrir_excel(str(ruta))
+    assert wb.read_only
+    ruta.unlink()                       # el archivo no queda bloqueado (en Windows importa)
+    assert ds.abrir_excel(_bytes_recaudo()).read_only   # también desde bytes (SharePoint, carga manual)
+
+
+def _bytes_recaudo():
+    import io
+    b = io.BytesIO()
+    fx.wb_recaudo().save(b)
+    return b.getvalue()
+
+
+def test_fila_inexistente_no_da_error():
+    import formatos
+    wb = ds.abrir_excel(_bytes_recaudo())
+    assert formatos.valores_fila(wb["Creditos SISMO"], 500) == []
+    assert formatos.valores_fila(wb["Detalle Cuotas"], 2)[4] == "Cód. crédito"
+
+
+def test_sin_avisos_de_openpyxl(tmp_path):
+    """Un número enorme en una celda con formato de fecha generaba un aviso por celda (550+ en producción)."""
+    import warnings
+    wb = fx.wb_recaudo()
+    ws = wb["Creditos SISMO"]
+    for i in range(50):
+        ws.cell(3 + i, 6, 19_141_851).number_format = "dd/mm/yyyy"
+    ruta = tmp_path / "r.xlsx"
+    wb.save(ruta)
+    with warnings.catch_warnings(record=True) as avisos:
+        warnings.simplefilter("default")
+        import importlib
+        importlib.reload(ds)            # vuelve a registrar el filtro de data_sources
+        ds.leer_recaudo(ruta=str(ruta))
+    assert not [a for a in avisos if "openpyxl" in str(a.filename)]

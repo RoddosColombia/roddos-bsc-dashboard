@@ -117,8 +117,8 @@ def fila_embudo_vacia(d):
 def fila_encabezado(ws, columna, max_fila=10, por_defecto=4):
     """Número de la fila donde está el encabezado `columna` (busca en las primeras filas)."""
     for r in range(1, max_fila + 1):
-        for c in ws[r]:
-            if isinstance(c.value, str) and c.value.strip() == columna:
+        for v in valores_fila(ws, r):
+            if isinstance(v, str) and v.strip() == columna:
                 return r
     return por_defecto
 
@@ -143,3 +143,9 @@ def a_hora_colombia(momento):
     if momento.tzinfo is None:
         momento = momento.replace(tzinfo=datetime.timezone.utc)
     return momento.astimezone(ZONA_COLOMBIA)
+
+
+def valores_fila(ws, fila):
+    """Valores de una fila de la hoja; lista vacía si la hoja no llega a esa fila.
+    En modo solo lectura (data_sources.abrir_excel), ws[fila] da error si la fila no existe."""
+    return list(next(ws.iter_rows(min_row=fila, max_row=fila, values_only=True), ()))
