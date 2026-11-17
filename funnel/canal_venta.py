@@ -64,7 +64,10 @@ def normalizar(texto):
         return PAUTA_GOOGLE, True
     if base.startswith("VOLANT") or base.startswith("CALLE") or base.startswith("OFICINA"):
         return CALLE, False
-    if base.startswith("RODDOTIZADO") or base.startswith("CLIENTE") or "ANTIGUO" in base:
+    # "RODDOTIZADO" solo dice que compró (toda fila de Facturación es una compra), no por dónde llegó.
+    if base.startswith("RODDOTIZADO"):
+        return VACIO, False
+    if base.startswith("CLIENTE") or "ANTIGUO" in base:
         return CLIENTE_RODDOS, False
     if base.startswith("ALIAD"):
         return ALIADO, False
